@@ -1,5 +1,5 @@
 # README.md
-content = """# KoMaTukuru テキスト整形ツール
+**KoMaTukuru テキスト整形ツール**
 
 **現在のバージョン**: v1.0.0（2025-09-05）
 
