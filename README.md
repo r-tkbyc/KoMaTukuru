@@ -1,5 +1,5 @@
-# Write the updated README.md with section 4 renamed to rules and a new changelog section.
-readme = """# テキスト整形ツール — README
+# Create a README.md file for download
+content = """# テキスト整形ツール（ブラウザだけで動く）
 
 **現在のバージョン**: v1.0.0（2025-09-05）
 
