@@ -1,4 +1,4 @@
-# Create a README.md file for download
+# README.md
 content = """# テキスト整形ツール（ブラウザだけで動く）
 
 **現在のバージョン**: v1.0.0（2025-09-05）
