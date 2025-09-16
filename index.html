@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Text Formatter v1.0.0 - 2025-09-05 -->
-  <meta name="app-version" content="v1.0.0">
+  <!-- Text Formatter v1.0.1 - 2025-09-16 -->
+  <meta name="app-version" content="v1.0.1">
   
   <title>KoMaTukuru テキスト整形ツール</title>
   <style>
@@ -137,7 +137,7 @@
 <body>
   <header>
     <h1>KoMaTukuru テキスト整形ツール</h1>
-    <span id="ver" class="ver-badge"></span>
+    <button id="ver" class="ver-badge"></button>
   </header>
   <main>
     <!-- タイトル セット -->
@@ -260,8 +260,8 @@
   <div class="toast" id="toast"></div>
 
   <script>
-  const APP_VERSION = "v1.0.0";
-  const APP_BUILD   = "2025-09-05";
+  const APP_VERSION = "v1.0.1";
+  P25-09-16";
   document.addEventListener("DOMContentLoaded", () => {
     const el = document.getElementById("ver");
     if (el) el.textContent = `${APP_VERSION} (${APP_BUILD})`;
@@ -817,6 +817,22 @@
   }
 
   [...document.querySelectorAll('.set')].map(makeSetController);
-  </script>
+  // v1.0.1: バージョン表記（右上）をクリアボタンとして機能させる（会期タイトル右横 .dt-free だけ保持）
+  (function(){
+    function clearAllExceptDtFree(){
+      var keep = document.querySelector('[data-set="kaiki"] .dt-free');
+      var nodes = document.querySelectorAll('input, textarea, select');
+      nodes.forEach(function(el){
+        if (keep && el === keep) return;
+        if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        else if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+        else el.value = '';
+      });
+      if (typeof toast === 'function') toast('クリアしました');
+    }
+    var vb = document.getElementById('ver');
+    if (vb) vb.addEventListener('click', function(e){ e.preventDefault(); clearAllExceptDtFree(); });
+  })();
+</script>
 </body>
 </html>
