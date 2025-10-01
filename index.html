@@ -170,6 +170,10 @@
             <input type="datetime-local" class="dt-free" step="60">
           </label>
           <button class="btn-copy-dtfree btn-compact" title="日時をコピー">コピー</button>
+          <div class="store-group" role="radiogroup" aria-label="店舗">
+            <label class="radio"><input type="radio" name="store" value="nihonbashi"><span>日本橋</span></label>
+            <label class="radio"><input type="radio" name="store" value="shinjuku" checked><span>新宿</span></label>
+          </div>
         </div>
         <div class="actions">
           <label class="year-wrap" title="年（未記載時の基準年）">
@@ -428,6 +432,31 @@
   const _wJP = (date)=>['日','月','火','水','木','金','土'][date.getDay()];
   const _toHalfDigits = (s)=>String(s||'').replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
 
+  function _getSelectedStore(){
+    // デフォルトは 'shinjuku'
+    return document.querySelector('input[name="store"]:checked')?.value || 'shinjuku';
+  }
+
+  /**
+   * 店舗と曜日に応じた既定の終了時刻（※があれば overrideHM が最優先）
+   * - shinjuku: 火曜 17:30 / その他 19:30
+   * - nihonbashi: 常に 19:30（火曜も 19:30）
+   */
+  function _defaultEndHMByStore(endDate, overrideHM){
+    if (overrideHM) return overrideHM;
+
+    const store = _getSelectedStore();      // 'shinjuku' | 'nihonbashi'
+    const isTue = endDate.getDay() === 2;   // 火曜？
+
+    let hh = 19, mm = 30;
+    if (store === 'shinjuku') {
+      hh = isTue ? 17 : 19;
+    } else if (store === 'nihonbashi') {
+      hh = 19; // 火曜でも 19:30
+    }
+    return { hh, mm };
+  }
+
   function _normalize(raw){
     let s = _toHalfDigits(raw||'');
     '〜～~-‐―—−→'.split('').forEach(c => { s = s.split(c).join('～'); });
@@ -476,12 +505,10 @@
   }
   function _timesRange(info, overrideHM){
     const end = new Date(info.ey, info.em-1, info.ed);
-    const tue = end.getDay() === 2;
-    const hh = overrideHM ? overrideHM.hh : (tue ? 17 : 19);
-    const mm = overrideHM ? overrideHM.mm : 30;
+    const endHM = _defaultEndHMByStore(end, overrideHM);
     return {
       startStr: _fmt(info.sy, info.sm, info.sd, 10, 30),
-      endStr:   _fmt(info.ey, info.em, info.ed, hh, mm)
+      endStr:   _fmt(info.ey, info.em, info.ed, endHM.hh, endHM.mm)
     };
   }
 
@@ -533,13 +560,12 @@
     return '■'+segs.join('・');
   }
   function _timesList(list, overrideHM){
-    const f=list[0], l=list[list.length-1];
-    const tue = new Date(l.y,l.m-1,l.d).getDay()===2;
-    const hh = overrideHM ? overrideHM.hh : (tue?17:19);
-    const mm = overrideHM ? overrideHM.mm : 30;
+    const f = list[0], l = list[list.length-1];
+    const end = new Date(l.y, l.m-1, l.d);
+    const endHM = _defaultEndHMByStore(end, overrideHM);
     return {
-      startStr: _fmt(f.y,f.m,f.d, 10, 30),
-      endStr:   _fmt(l.y,l.m,l.d, hh, mm)
+      startStr: _fmt(f.y, f.m, f.d, 10, 30),
+      endStr:   _fmt(l.y, l.m, l.d, endHM.hh, endHM.mm)
     };
   }
 
@@ -564,13 +590,11 @@
     return `■${one.m}月${one.d}日（${wk}${one.mark||''}）`;
   }
   function _timesSingle(one, overrideHM){
-    const d=new Date(one.y,one.m-1,one.d);
-    const tue=d.getDay()===2;
-    const hh = overrideHM ? overrideHM.hh : (tue?17:19);
-    const mm = overrideHM ? overrideHM.mm : 30;
+    const d = new Date(one.y, one.m-1, one.d);
+    const endHM = _defaultEndHMByStore(d, overrideHM);
     return {
-      startStr:_fmt(one.y,one.m,one.d, 10, 30),
-      endStr:  _fmt(one.y,one.m,one.d, hh, mm)
+      startStr: _fmt(one.y, one.m, one.d, 10, 30),
+      endStr:   _fmt(one.y, one.m, one.d, endHM.hh, endHM.mm)
     };
   }
 
@@ -598,12 +622,10 @@
     const wk=_wJP(new Date(o.y,o.m-1,o.d));
     return `${o.m}月${o.d}日（${wk}${o.rMark||''}）`;
   }
-  function _endStrFor(y,m,d, overrideHM){
-    const dt=new Date(y,m-1,d);
-    let hh = (dt.getDay()===2) ? 17 : 19;
-    let mm = 30;
-    if (overrideHM){ hh=overrideHM.hh; mm=overrideHM.mm; }
-    return _fmt(y,m,d,hh,mm);
+  function _endStrFor(y, m, d, overrideHM){
+    const dt = new Date(y, m-1, d);
+    const endHM = _defaultEndHMByStore(dt, overrideHM);
+    return _fmt(y, m, d, endHM.hh, endHM.mm);
   }
 
   // 文末※（テキスト保持＆終了時刻上書き抽出）
@@ -843,19 +865,32 @@
   [...document.querySelectorAll('.set')].map(makeSetController);
   // v1.0.1: バージョン表記（右上）をクリアボタンとして機能させる（会期タイトル右横 .dt-free だけ保持）
   (function(){
-    function clearAllExceptDtFree(){
-      var keep = document.querySelector('[data-set="kaiki"] .dt-free');
+    function clearAllExceptDtFreeAndStore(){
       var nodes = document.querySelectorAll('input, textarea, select');
       nodes.forEach(function(el){
-        if (keep && el === keep) return;
-        if (el.tagName === 'SELECT') el.selectedIndex = 0;
-        else if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
-        else el.value = '';
+        // dt-free は保持
+        if (el.classList.contains('dt-free')) return;
+        // 店舗ラジオボタンも保持
+        if (el.type === 'radio' && el.name === 'store') return;
+
+        if (el.tagName === 'SELECT') {
+          el.selectedIndex = 0;
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+          el.checked = false;
+        } else {
+          el.value = '';
+        }
       });
       if (typeof toast === 'function') toast('クリアしました');
     }
+
     var vb = document.getElementById('ver');
-    if (vb) vb.addEventListener('click', function(e){ e.preventDefault(); clearAllExceptDtFree(); });
+    if (vb) {
+      vb.addEventListener('click', function(e){
+        e.preventDefault();
+        clearAllExceptDtFreeAndStore();
+      });
+    }
   })();
 </script>
 </body>
