@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Text Formatter v1.0.2 - 2025-09-24 -->
-  <meta name="app-version" content="v1.0.2">
+  <!-- Text Formatter v1.0.3 - 2025-10-01 -->
+  <meta name="app-version" content="v1.0.3">
   
   <title>KoMaTukuru テキスト整形ツール</title>
   <style>
@@ -260,8 +260,8 @@
   <div class="toast" id="toast"></div>
 
   <script>
-  const APP_VERSION = "v1.0.2";
-  const APP_BUILD = "2025-09-24";
+  const APP_VERSION = "v1.0.3";
+  const APP_BUILD = "2025-10-01";
 
   // 価格直前の全角スペース付与を将来再有効化できるように保持
   const PRICE_SPACE_RULE_ENABLED = false;
@@ -303,7 +303,9 @@
       .replace(/\[/g, '［')
       .replace(/\]/g, '］')
       // 半角チルダ "~" と JIS波ダッシュ "〜" → 全角チルダ "～"
-      .replace(/[\u007E\u301C]/g, '～');
+      .replace(/[\u007E\u301C]/g, '～')
+      // 半角矢印 "→" も全角チルダ "～" に統一
+      .replace(/→/g, '～');
   });
   // 2.x) 用語ゆれ・表記統一（全体適用）
   // ※順序注意：POPUPSTORE → POPUPSHOP → POPUP の順でマッチさせる
@@ -348,8 +350,12 @@
       .replace(/\*/g,'※').replace(/＊/g,'※');
     // 連続英数字の中に入る記号の半角統一
     body = body.replace(/[A-Za-z0-9０-９]+[\p{P}\p{S}]+(?=[A-Za-z0-9０-９]+)/gu, seg =>
-      seg.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0))
-         .replace(/[‐―－ー‒–—−]/g, '-')
+      seg.replace(/[！-～]/g, ch => {
+        // 括弧類は常に全角で保持（英数字に挟まれていても半角に戻さない）
+        const keep = '（）［］｛｝「」『』《》〔〕〈〉';
+        if (keep.includes(ch)) return ch;
+        return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
+      }).replace(/[‐―－ー‒–—−]/g, '-')
     );
     return body;
   });
@@ -753,30 +759,43 @@
         toast('変換しました'); return;
       }
 
-      if(setName === 'honbun'){
-        // 本文：会期・会場の出力を<p>で挿入 → 空行 <p><br></p> → 本文各行末に<br>
+      if (setName === 'honbun') {
+        // 本文：会期/会場を<p>で挿入 → 空行 <p><br></p> → 本文全体を<p>...</p>で囲み、各行末に<br>
         const kaikiOutEl = document.querySelector('[data-set="kaiki"] .output');
         const venueOutEl = document.querySelector('[data-set="venue"] .output');
         const kaikiVal = (kaikiOutEl && kaikiOutEl.value) ? kaikiOutEl.value : '';
         const venueVal = (venueOutEl && venueOutEl.value) ? venueOutEl.value : '';
 
         const outLines = [];
+
+        // 先頭に会期/会場を <p> で挿入
         if (kaikiVal.trim()) {
           kaikiVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
         }
         if (venueVal.trim()) {
           venueVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
         }
+
+        // 空行 <p><br></p>
         outLines.push('<p><br></p>');
 
+        // 本文全体を <p> ... </p> で囲む（各行末に <br>、空行は <br> のみ）
         const body = transform(src || '');
-        body.split(/\r?\n/).forEach(line => {
-          if (line.trim() === '') { outLines.push('<br>'); }
-          else { outLines.push(line + '<br>'); }
-        });
+        const bodyLines = body.split(/\r?\n/);
+        let para = '<p>\n';
+        for (const line of bodyLines) {
+          if (line.trim() === '') {
+            para += '<br>\n';
+          } else {
+            para += line + '<br>\n';
+          }
+        }
+        para += '</p>';
+        outLines.push(para);
 
         els.output.value = outLines.join('\n');
-        toast('変換しました'); return;
+        toast('変換しました');
+        return;
       }
 
       // タイトル（その他）
