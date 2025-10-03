@@ -61,22 +61,22 @@
 
   /* === Unity-like compact theme overrides (CSS-only) === */
   :root { --gap: 6px; }
-  body { background:#1f1f1f; color:#dcdcdc; }
-  header { background:#2c2c2c; border-bottom:1px solid #3c3c3c; padding:8px 12px; }
+  body { background:#383838; color:#dcdcdc; }
+  header { background:#383838; border-bottom:1px solid #222; padding:8px 12px; }
   h1 { font-size:14px; font-weight:600; color:#dcdcdc; }
   main { padding:10px; }
-  .set { background:#2b2b2b; border:1px solid #3b3b3b; border-radius:2px; padding:6px; margin-top:10px; }
+  .set { background:#383838; border:1px solid #222; border-radius:2px; padding:6px; margin-top:10px; }
   .set-title { font-size:12px; color:#e0e0e0; }
   .actions { gap:5px; }
-  .panel { background:#2a2a2a; border:1px solid #3b3b3b; border-radius:2px; padding:6px; gap:6px; }
+  .panel { background:#383838; border:1px solid #222; border-radius:2px; padding:6px; gap:6px; }
   .panel h2 { font-size:11px; color:#bfbfbf; margin:0 0 2px; font-weight:600; }
   textarea { background:#2a2a2a; border:1px solid #3b3b3b; border-radius:2px; color:#e3e3e3; padding:8px; line-height:1.4; font-size:12px; }
   textarea[readonly]{opacity:.98;}
   textarea:focus, select:focus, input:focus, button:focus { outline:1px solid #2a81fb; outline-offset:0; box-shadow:0 0 0 1px #2a81fb inset; }
-  button, .year-select, .dt-select, .dt-free { background:#3d3d3d; border:1px solid #565656; color:#eaeaea; border-radius:2px; padding:4px 8px; font-size:12px; }
+  button, .year-select, .dt-select, .dt-free { background:#585858; border:1px solid #111111; color:#eaeaea; border-radius:2px; padding:4px 8px; font-size:12px; }
   button:hover { background:#4a4a4a; }
   button:active { background:#5a5a5a; transform:none; }
-  .primary { background:#4a4a4a; border-color:#6a6a6a; color:#ffffff; }
+  .primary { background:#585858; border-color:#222; color:#ffffff; }
   .date-field { background:#2a2a2a; border:1px solid #3b3b3b; border-radius:2px; padding:6px; min-height:40px; font-size:12px; }
   .date-label { color:#bfbfbf; font-size:11px; }
   .toast { background:rgba(46,46,46,.98); border:1px solid #3b3b3b; color:#dedede; font-size:12px; }
@@ -131,6 +131,11 @@
   header { display:flex; align-items:center; justify-content:space-between; }
   .ver-badge { font-size:10px; background:#3d3d3d; border:1px solid #565656; color:#eaeaea;
     border-radius:2px; padding:0 6px; line-height:18px; height:18px; white-space:nowrap; }
+
+  /* 店舗ラジオ：チェック時の色 */
+  .store-group input[type="radio"]{
+    accent-color: #2a81fb; /* 好きな色に変更可 */
+  }
   </style>
 </head>
 
@@ -193,7 +198,7 @@
       <div class="row">
         <section class="panel">
           <h2>入力</h2>
-          <textarea class="input" placeholder="ここにテキストをペースト（複数行OK）"></textarea>
+          <textarea class="input" placeholder="ここにテキストをペースト"></textarea>
         </section>
         <section class="panel">
           <h2>出力</h2>
