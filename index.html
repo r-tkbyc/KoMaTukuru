@@ -183,8 +183,8 @@
         <div class="actions">
           <label class="year-wrap" title="年（未記載時の基準年）">
             <select class="year-select">
-              <option value="2025">2025</option>
-              <option value="2026" selected>2026</option>
+              <option value="2025" selected>2025</option>
+              <option value="2026">2026</option>
               <option value="2027">2027</option>
               <option value="2028">2028</option>
               <option value="2029">2029</option>
@@ -485,7 +485,7 @@
     const L = s.slice(0,i), R = s.slice(i+1);
 
     const yL = L.match(/([0-9]{4})年/);
-    const sy = yL ? +yL[1] : (baseYear||2026);
+    const sy = yL ? +yL[1] : (baseYear||2025);
 
     let sm, sd;
     let m = L.match(/([0-9]{1,2})月([0-9]{1,2})日/);
@@ -546,7 +546,7 @@
     })();
     if (parts.length<2) return null;
 
-    const list=[]; let pm=null, py=null; const base=baseYear||2026;
+    const list=[]; let pm=null, py=null; const base=baseYear||2025;
     for (const p of parts){
       let mark=''; const par=p.match(/（([^）]+)）/); if(par){ const t=par[1]; if(t.includes('祝')) mark='・祝'; else if(t.includes('振')) mark='・振'; }
       let y=null,m=null,d=null;
@@ -594,7 +594,7 @@
     if(md){ m=+md[1]; d=+md[2]; }
     else { md = s.match(/([0-9]{1,2})\/([0-9]{1,2})/); if(md){ m=+md[1]; d=+md[2]; } }
     if(m==null||d==null) return null;
-    if(y==null) y=baseYear||2026;
+    if(y==null) y=baseYear||2025;
     let mark=''; const par=s.match(/（([^）]+)）/); if(par){ const t=par[1]; if(t.includes('祝')) mark='・祝'; else if(t.includes('振')) mark='・振'; }
     return {y,m,d,mark};
   }
@@ -618,7 +618,7 @@
     const left = n.slice(0,i);
     if (left !== '開催中') return null;
     const R = n.slice(i+1);
-    let y = (R.match(/([0-9]{4})年/)) ? Number(RegExp.$1) : (baseYear || 2026);
+    let y = (R.match(/([0-9]{4})年/)) ? Number(RegExp.$1) : (baseYear || 2025);
     let m,d;
     let mr = R.match(/([0-9]{1,2})月([0-9]{1,2})日/);
     if (mr){ m=+mr[1]; d=+mr[2]; }
@@ -699,7 +699,7 @@
       const setName = setEl.getAttribute('data-set');
 
       if(setName === 'kaiki'){
-        const baseYear = els.yearSel ? Number(els.yearSel.value) : 2026;
+        const baseYear = els.yearSel ? Number(els.yearSel.value) : 2025;
         const lines = String(src).split(/\r?\n/).filter(l => l.trim() !== '');
         const outLines = []; const startLines = []; const endLines = [];
 
@@ -916,6 +916,8 @@
         if (el.type === 'radio' && el.name === 'store') return;
 
         if (el.tagName === 'SELECT') {
+          // 基準年セレクトは保持（クリアしない）
+          if (el.classList.contains('year-select')) return;
           el.selectedIndex = 0;
         } else if (el.type === 'checkbox' || el.type === 'radio') {
           el.checked = false;
