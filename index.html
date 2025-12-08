@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Text Formatter v1.0.4 - 2025-11-04 -->
-  <meta name="app-version" content="v1.0.4">
+  <!-- Text Formatter v1.0.5 - 2025-12-08 -->
+  <meta name="app-version" content="v1.0.5">
   
   <title>KoMaTukuru テキスト整形ツール</title>
   <style>
@@ -183,8 +183,8 @@
         <div class="actions">
           <label class="year-wrap" title="年（未記載時の基準年）">
             <select class="year-select">
-              <option value="2025" selected>2025</option>
-              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
               <option value="2027">2027</option>
               <option value="2028">2028</option>
               <option value="2029">2029</option>
@@ -269,8 +269,8 @@
   <div class="toast" id="toast"></div>
 
   <script>
-  const APP_VERSION = "v1.0.4";
-  const APP_BUILD = "2025-11-04";
+  const APP_VERSION = "v1.0.5";
+  const APP_BUILD = "2025-12-08";
 
   // 価格直前の全角スペース付与を将来再有効化できるように保持
   const PRICE_SPACE_RULE_ENABLED = false;
@@ -306,7 +306,8 @@
   rulesGlobal.push(function siCompatUnits(s){
     // U+339D: ㎝, U+3396: ㎖
     return String(s||'').replace(/\u339D/g, 'cm')
-                        .replace(/\u3396/g, 'ml');
+                        .replace(/\u3396/g, 'ml')
+                        .replace(/\u339C/g, 'mm');
   });
   // 1.2) ［］は常に全角、～は常に全角（URLはurlProtectで保護済み）
   rulesGlobal.push(function fullwidthBracketsAndWave(s){
