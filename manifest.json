@@ -1,10 +1,13 @@
 {
   "manifest_version": 3,
   "name": "KoMaTukuru toCMS",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "KoMaTukuruから高島屋CMSへ空欄のみ自動入力します。",
   "permissions": ["tabs", "storage"],
-  "host_permissions": ["https://cmstakashimaya.com/*"],
+  "host_permissions": [
+    "https://cmstakashimaya.com/*",
+    "https://r-tkbyc.github.io/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -15,7 +18,10 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://r-tkbyc.github.io/KoMaTukuru/*",
+        "https://r-tkbyc.github.io/KoMaTukuru"
+      ],
       "js": ["koma_inject.js"],
       "run_at": "document_idle"
     }
