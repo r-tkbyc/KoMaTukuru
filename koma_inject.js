@@ -1,7 +1,6 @@
 // koma_inject.js
 
 function isKoMaTukuruPage() {
-  // かなり軽い判定：必要要素が揃ってるときだけ動く
   const titleSet = document.querySelector('[data-set="title"]');
   const kaikiSet = document.querySelector('[data-set="kaiki"]');
   if (!titleSet || !kaikiSet) return false;
@@ -23,7 +22,6 @@ function fmtDtFree(datetimeLocalValue) {
     const mm = v.slice(14, 16);
     return `${y}/${mo}/${d} ${hh}:${mm}`;
   }
-  // 想定外ならそのまま返す（ユーザー運用に合わせる）
   return v;
 }
 
@@ -34,17 +32,95 @@ function getValue(selector) {
   return (el.textContent || "").trim();
 }
 
+/**
+ * 会場テキストから「地下N階」または「N階」を抽出して重複排除し配列で返す
+ * 例:
+ *  "■地下1階［Takase］\n■オム・メゾン6階 紳士鞄" -> ["地下1階","6階"]
+ */
+function extractFloorsFromVenueText(venueText) {
+  const s = String(venueText || "");
+  if (!s.trim()) return [];
+
+  // 全角数字→半角（念のため）
+  const half = s.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+
+  // 地下N階 or N階（1つの行に複数は想定薄いが、全体から拾う）
+  const re = /(地下\s*[0-9]{1,2}\s*階|[0-9]{1,2}\s*階)/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(half)) !== null) {
+    const token = m[1].replace(/\s+/g, ''); // "地下 1 階" -> "地下1階"
+    found.push(token);
+  }
+
+  // 重複排除（順序は出現順）
+  const uniq = [];
+  const seen = new Set();
+  for (const t of found) {
+    if (!seen.has(t)) { seen.add(t); uniq.push(t); }
+  }
+  return uniq;
+}
+
+/**
+ * 抽出した階（地下1階/地下2階/1階〜14階）を
+ * CMS「新宿 館なし」側の option value に変換する
+ *
+ * ルール：
+ *  地下1階 -> F00201B01
+ *  地下2階 -> F00201B02
+ *  N階(1-14) -> F00201F + 2桁
+ */
+function mapFloorTokenToCmsValue(token) {
+  const t = String(token || "").trim();
+  if (!t) return null;
+
+  // 地下
+  const b = t.match(/^地下([0-9]{1,2})階$/);
+  if (b) {
+    const n = Number(b[1]);
+    if (n === 1) return "F00201B01";
+    if (n === 2) return "F00201B02";
+    return null; // 想定外はスキップ
+  }
+
+  // 地上
+  const f = t.match(/^([0-9]{1,2})階$/);
+  if (f) {
+    const n = Number(f[1]);
+    if (n >= 1 && n <= 14) {
+      return "F00201F" + String(n).padStart(2, "0");
+    }
+    return null;
+  }
+
+  return null;
+}
+
 function buildPayload() {
   const titleOutput = getValue('[data-set="title"] textarea.output');
   const dtFreeRaw = getValue('[data-set="kaiki"] .dt-free');
   const publicFrom = fmtDtFree(dtFreeRaw);
 
-  // 会期出力（kaiki-output）
   const kaikiOutput = getValue('[data-set="kaiki"] textarea.output.kaiki-output') ||
                       getValue('[data-set="kaiki"] textarea.output');
 
   const startStr = getValue('[data-set="kaiki"] textarea.date-start');
   const endStr   = getValue('[data-set="kaiki"] textarea.date-end');
+
+  // 会場（出力）から階を抽出 → CMS value に変換（null除外）
+  const venueOut = getValue('[data-set="venue"] textarea.output');
+  const floorTokens = extractFloorsFromVenueText(venueOut);
+  const floorValues = floorTokens
+    .map(mapFloorTokenToCmsValue)
+    .filter(v => !!v);
+
+  // 重複排除（念のため）
+  const uniqFloorValues = [];
+  const seen = new Set();
+  for (const v of floorValues) {
+    if (!seen.has(v)) { seen.add(v); uniqFloorValues.push(v); }
+  }
 
   return {
     titleText: titleOutput,
@@ -52,7 +128,10 @@ function buildPayload() {
     periodText: kaikiOutput,
     articleFromDate: startStr,
     articleToDate: endStr,
-    publicToDate: endStr
+    publicToDate: endStr,
+
+    // フロア（CMS option value 配列）
+    floorValues: uniqFloorValues
   };
 }
 
@@ -63,7 +142,6 @@ function insertToCmsButton() {
   const actions = titleSet.querySelector('.set-head .actions');
   if (!actions) return;
 
-  // 既に追加済みなら何もしない
   if (actions.querySelector('.btn-to-cms')) return;
 
   const convertBtn = actions.querySelector('.btn-convert');
@@ -75,15 +153,9 @@ function insertToCmsButton() {
   btn.textContent = 'toCMS';
   btn.title = 'CMSへ自動入力（空欄のみ）';
 
-  // 見た目：既存ボタンと同じ雰囲気に寄せる（CSSは既存buttonに乗る）
-  // クリック時：全項目まとめて送る
   btn.addEventListener('click', async (e) => {
     e.preventDefault();
-
     const payload = buildPayload();
-
-    // KoMaTukuruの各値が未変換の可能性があるので、ここで「変換」してから送りたい場合は
-    // convertBtn.click(); を先に呼ぶ設計も可能。今回は「現状の出力を送る」仕様でそのまま。
 
     try {
       await chrome.runtime.sendMessage({
@@ -91,7 +163,7 @@ function insertToCmsButton() {
         payload
       });
     } catch {
-      // 仕様：通知は後で。今は黙る。
+      // 仕様：通知なし
     }
   });
 
@@ -103,7 +175,6 @@ function boot() {
   if (!isKoMaTukuruPage()) return;
   insertToCmsButton();
 
-  // DOMが後から描画されても追従
   const mo = new MutationObserver(() => {
     if (!isKoMaTukuruPage()) return;
     insertToCmsButton();

@@ -23,7 +23,6 @@ async function findBestCmsTab() {
   const candidates = tabs.filter(t => t.url && isTargetCmsUrl(t.url));
   if (candidates.length === 0) return null;
 
-  // 「最後に触ったタブ」を優先（lastAccessedが使える環境）
   candidates.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
   return candidates[0];
 }
@@ -34,12 +33,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     const cmsTab = await findBestCmsTab();
     if (!cmsTab || !cmsTab.id) {
-      // 仕様：見つからない時は静かに終了（必要なら後で通知追加）
       sendResponse({ ok: false, reason: "CMS tab not found" });
       return;
     }
 
-    // CMS側へ流し込み依頼
     await chrome.tabs.sendMessage(cmsTab.id, {
       type: "CMS_FILL",
       payload: msg.payload
@@ -48,6 +45,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true, tabId: cmsTab.id });
   })();
 
-  // async sendResponse
   return true;
 });

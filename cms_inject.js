@@ -25,17 +25,47 @@ function setIfEmpty(selector, value) {
 
   const cur = (el.value || "").trim();
   if (cur !== "") {
-    // 既に値あり：事故防止で触らない
     return { touched: true, filled: false };
   }
 
   el.value = v;
-
-  // 反応系（validation / datetimepicker / jQuery等）向けにイベントを出す
   el.dispatchEvent(new Event("input", { bubbles: true }));
   el.dispatchEvent(new Event("change", { bubbles: true }));
 
   return { touched: true, filled: true };
+}
+
+/**
+ * フロアの<select multiple> (#article_floor) を
+ * 「未選択のときだけ」 values に基づいて複数選択する
+ */
+function selectFloorsIfNoneSelected(values) {
+  const vals = Array.isArray(values) ? values.filter(Boolean) : [];
+  if (vals.length === 0) return { touched: false, filled: false };
+
+  const sel = document.querySelector("#article_floor");
+  if (!sel) return { touched: false, filled: false };
+
+  // 既に何か選択されているなら触らない（事故防止）
+  const already = Array.from(sel.options).some(o => o.selected);
+  if (already) return { touched: true, filled: false };
+
+  // values に一致する option を selected にする（存在しないものは無視）
+  const set = new Set(vals);
+  let any = false;
+  for (const opt of sel.options) {
+    if (set.has(opt.value)) {
+      opt.selected = true;
+      any = true;
+    }
+  }
+
+  if (any) {
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    return { touched: true, filled: true };
+  }
+  return { touched: true, filled: false };
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
@@ -43,8 +73,6 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!isTargetCmsPage()) return;
 
   const p = msg.payload || {};
-
-  // マッピング（あなたの確定仕様）
   const results = [];
 
   // タイトル → 管理名、タイトル
@@ -64,12 +92,12 @@ chrome.runtime.onMessage.addListener((msg) => {
   results.push(setIfEmpty("#article_to_date", p.articleToDate));
   results.push(setIfEmpty("#public_to_date", p.publicToDate));
 
-  // ダイアログ（シンプル）
-  // ※「実際に1つでも入力した」時だけ出す（邪魔になりすぎないように）
+  // ✅ フロア（未選択時だけ）
+  results.push(selectFloorsIfNoneSelected(p.floorValues));
+
+  // ダイアログ：何か1つでも入力できた場合のみ
   const filledCount = results.filter(r => r.filled).length;
   if (filledCount > 0) {
     alert("入力完了");
-  } else {
-    // 全部スキップ（既に埋まってる/値がない/要素がない）時は何も出さない運用
   }
 });
