@@ -1,26 +1,18 @@
 // cms_inject.js
 
-const STORE_PARAMS = {
-  shinjuku:   { store_id: "2", store_suffix_number: "1" },
-  nihonbashi: { store_id: "1", store_suffix_number: "2" },
-};
+const TARGET_STORE_ID = "2";
+const TARGET_STORE_SUFFIX = "1";
 
-function getThisPageStoreKey() {
+function isTargetCmsPage() {
   try {
     const u = new URL(location.href);
-    if (u.origin !== "https://cmstakashimaya.com") return null;
-    if (!u.pathname.startsWith("/webadmin/addon/store/article/create/")) return null;
+    if (u.origin !== "https://cmstakashimaya.com") return false;
+    if (!u.pathname.startsWith("/webadmin/addon/store/article/create/")) return false;
 
     const sp = u.searchParams;
-    const sid = sp.get("store_id");
-    const suf = sp.get("store_suffix_number");
-
-    for (const [key, v] of Object.entries(STORE_PARAMS)) {
-      if (sid === v.store_id && suf === v.store_suffix_number) return key;
-    }
-    return null;
+    return sp.get("store_id") === TARGET_STORE_ID && sp.get("store_suffix_number") === TARGET_STORE_SUFFIX;
   } catch {
-    return null;
+    return false;
   }
 }
 
@@ -32,7 +24,9 @@ function setIfEmpty(selector, value) {
   if (!el) return { touched: false, filled: false };
 
   const cur = (el.value || "").trim();
-  if (cur !== "") return { touched: true, filled: false };
+  if (cur !== "") {
+    return { touched: true, filled: false };
+  }
 
   el.value = v;
   el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -41,6 +35,10 @@ function setIfEmpty(selector, value) {
   return { touched: true, filled: true };
 }
 
+/**
+ * フロアの<select multiple> (#article_floor) を
+ * 「未選択のときだけ」 values に基づいて複数選択する
+ */
 function selectFloorsIfNoneSelected(values) {
   const vals = Array.isArray(values) ? values.filter(Boolean) : [];
   if (vals.length === 0) return { touched: false, filled: false };
@@ -48,13 +46,13 @@ function selectFloorsIfNoneSelected(values) {
   const sel = document.querySelector("#article_floor");
   if (!sel) return { touched: false, filled: false };
 
-  // 事故防止：すでに何か選択されてたら触らない
+  // 既に何か選択されているなら触らない（事故防止）
   const already = Array.from(sel.options).some(o => o.selected);
   if (already) return { touched: true, filled: false };
 
+  // values に一致する option を selected にする（存在しないものは無視）
   const set = new Set(vals);
   let any = false;
-
   for (const opt of sel.options) {
     if (set.has(opt.value)) {
       opt.selected = true;
@@ -72,19 +70,12 @@ function selectFloorsIfNoneSelected(values) {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== "CMS_FILL") return;
+  if (!isTargetCmsPage()) return;
 
   const p = msg.payload || {};
-  const wantStore = p.storeKey || "shinjuku";
-
-  const hereStore = getThisPageStoreKey();
-  if (!hereStore) return;
-
-  // payloadの店舗と一致するタブにだけ反映
-  if (hereStore !== wantStore) return;
-
   const results = [];
 
-  // タイトル → 管理名＆タイトル
+  // タイトル → 管理名、タイトル
   results.push(setIfEmpty("#manage_name_name", p.titleText));
   results.push(setIfEmpty("#title", p.titleText));
 
@@ -94,17 +85,19 @@ chrome.runtime.onMessage.addListener((msg) => {
   // 会期出力 → 会期
   results.push(setIfEmpty("#period", p.periodText));
 
-  // 開始/終了 → 開催開始/開催終了
+  // 開始日 → 開催開始
   results.push(setIfEmpty("#article_from_date", p.articleFromDate));
-  results.push(setIfEmpty("#article_to_date", p.articleToDate));
 
-  // 終了 → 公開終了
+  // 終了日 → 開催終了＆公開終了
+  results.push(setIfEmpty("#article_to_date", p.articleToDate));
   results.push(setIfEmpty("#public_to_date", p.publicToDate));
 
-  // フロア（未選択時のみ）
+  // ✅ フロア（未選択時だけ）
   results.push(selectFloorsIfNoneSelected(p.floorValues));
 
-  // 何か1つでも入力できた場合だけ通知
+  // ダイアログ：何か1つでも入力できた場合のみ
   const filledCount = results.filter(r => r.filled).length;
-  if (filledCount > 0) alert("入力完了");
+  if (filledCount > 0) {
+    alert("入力完了");
+  }
 });
