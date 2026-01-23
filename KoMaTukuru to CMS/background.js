@@ -1,37 +1,28 @@
 // background.js (MV3 service worker)
 
-const CMS_CREATE_URL_PATTERN =
-  "https://cmstakashimaya.com/webadmin/addon/store/article/create/*";
+const CMS_CREATE_URL_PATTERN = "https://cmstakashimaya.com/webadmin/addon/store/article/create/*";
+const TARGET_STORE_ID = "2";
+const TARGET_STORE_SUFFIX = "1";
 
-// 店舗ごとのCMS識別（URLクエリで厳密チェック）
-const STORE_PARAMS = {
-  shinjuku:   { store_id: "2", store_suffix_number: "1" },
-  nihonbashi: { store_id: "1", store_suffix_number: "2" },
-};
-
-function isTargetCmsUrl(urlStr, storeKey) {
+function isTargetCmsUrl(urlStr) {
   try {
     const u = new URL(urlStr);
     if (u.origin !== "https://cmstakashimaya.com") return false;
     if (!u.pathname.startsWith("/webadmin/addon/store/article/create/")) return false;
 
-    const target = STORE_PARAMS[storeKey];
-    if (!target) return false;
-
     const sp = u.searchParams;
-    return sp.get("store_id") === target.store_id &&
-           sp.get("store_suffix_number") === target.store_suffix_number;
+    return sp.get("store_id") === TARGET_STORE_ID && sp.get("store_suffix_number") === TARGET_STORE_SUFFIX;
   } catch {
     return false;
   }
 }
 
-async function findBestCmsTab(storeKey) {
+async function findBestCmsTab() {
   const tabs = await chrome.tabs.query({ url: CMS_CREATE_URL_PATTERN });
-  const candidates = tabs.filter(t => t.url && isTargetCmsUrl(t.url, storeKey));
+
+  const candidates = tabs.filter(t => t.url && isTargetCmsUrl(t.url));
   if (candidates.length === 0) return null;
 
-  // 最後に触ったタブを優先
   candidates.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
   return candidates[0];
 }
@@ -40,21 +31,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     if (!msg || msg.type !== "KOMA_SEND_TO_CMS") return;
 
-    const payload = msg.payload || {};
-    const storeKey = payload.storeKey || "shinjuku"; // フォールバックは新宿
-
-    const cmsTab = await findBestCmsTab(storeKey);
+    const cmsTab = await findBestCmsTab();
     if (!cmsTab || !cmsTab.id) {
-      sendResponse({ ok: false, reason: "CMS tab not found", storeKey });
+      sendResponse({ ok: false, reason: "CMS tab not found" });
       return;
     }
 
     await chrome.tabs.sendMessage(cmsTab.id, {
       type: "CMS_FILL",
-      payload
+      payload: msg.payload
     });
 
-    sendResponse({ ok: true, tabId: cmsTab.id, storeKey });
+    sendResponse({ ok: true, tabId: cmsTab.id });
   })();
 
   return true;

@@ -10,13 +10,6 @@ function isKoMaTukuruPage() {
   return hasConvert && hasOutput;
 }
 
-function getValue(selector) {
-  const el = document.querySelector(selector);
-  if (!el) return "";
-  if ("value" in el) return (el.value || "").trim();
-  return (el.textContent || "").trim();
-}
-
 function fmtDtFree(datetimeLocalValue) {
   // "2026-01-19T12:30" -> "2026/01/19 12:30"
   const v = (datetimeLocalValue || "").trim();
@@ -32,171 +25,104 @@ function fmtDtFree(datetimeLocalValue) {
   return v;
 }
 
-function getSelectedStoreKey() {
-  // KoMaTukuruの会期セットの店舗ラジオ
-  return document.querySelector('input[name="store"]:checked')?.value || "shinjuku";
+function getValue(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return "";
+  if ("value" in el) return (el.value || "").trim();
+  return (el.textContent || "").trim();
 }
 
-/** 全角数字→半角 */
-function toHalfDigits(s) {
-  return String(s || "").replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
-}
-
-/** venue出力を行配列に */
-function getVenueLines(venueText) {
+/**
+ * 会場テキストから「地下N階」または「N階」を抽出して重複排除し配列で返す
+ * 例:
+ *  "■地下1階［Takase］\n■オム・メゾン6階 紳士鞄" -> ["地下1階","6階"]
+ */
+function extractFloorsFromVenueText(venueText) {
   const s = String(venueText || "");
   if (!s.trim()) return [];
-  return s.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-}
 
-/**
- * 共通：行から「地下N階」または「N階」または「屋上」を抽出
- * 戻り: { kind: 'B'|'F'|'R', n?: number } | null
- */
-function extractFloorInfoFromLine(line) {
-  const s = toHalfDigits(line);
+  // 全角数字→半角（念のため）
+  const half = s.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
 
-  // 屋上
-  if (s.includes("屋上")) return { kind: "R" };
-
-  // 地下N階（例: 本館地下1階, 地下 1 階 など）
-  const b = s.match(/地下\s*([0-9]{1,2})\s*階/);
-  if (b) return { kind: "B", n: Number(b[1]) };
-
-  // N階（例: オム・メゾン6階）
-  const f = s.match(/([0-9]{1,2})\s*階/);
-  if (f) return { kind: "F", n: Number(f[1]) };
-
-  return null;
-}
-
-/** 新宿（館なし）: floor token から value */
-function mapShinjukuFloorValue(line) {
-  const info = extractFloorInfoFromLine(line);
-  if (!info) return null;
-
-  if (info.kind === "B") {
-    if (info.n === 1) return "F00201B01";
-    if (info.n === 2) return "F00201B02";
-    return null;
-  }
-  if (info.kind === "F") {
-    const n = info.n;
-    if (n >= 1 && n <= 14) return "F00201F" + String(n).padStart(2, "0");
-    return null;
-  }
-  // 新宿に屋上は無い前提：スキップ
-  return null;
-}
-
-/**
- * 日本橋: 行に必ず「本館/新館/東館」が入る前提で value を一意に決める
- *  - 新館: F00101 (B01, B04, F01-07)
- *  - 本館: F00102 (B01, B02, F01-08, R01)
- *  - 東館: F00103 (B01, B03, F01-06, R01)
- */
-function mapNihonbashiFloorValue(line) {
-  const s = String(line || "");
-  const hall =
-    s.includes("本館") ? "honkan" :
-    s.includes("新館") ? "shinkan" :
-    s.includes("東館") ? "toukan" :
-    null;
-
-  // 館が無い行は事故防止でスキップ
-  if (!hall) return null;
-
-  const info = extractFloorInfoFromLine(s);
-  if (!info) return null;
-
-  if (hall === "shinkan") {
-    const prefix = "F00101";
-    if (info.kind === "B") {
-      if (info.n === 1) return prefix + "B01";
-      if (info.n === 4) return prefix + "B04";
-      return null;
-    }
-    if (info.kind === "F") {
-      const n = info.n;
-      if (n >= 1 && n <= 7) return prefix + "F" + String(n).padStart(2, "0");
-      return null;
-    }
-    // 新館に屋上は無い
-    return null;
+  // 地下N階 or N階（1つの行に複数は想定薄いが、全体から拾う）
+  const re = /(地下\s*[0-9]{1,2}\s*階|[0-9]{1,2}\s*階)/g;
+  const found = [];
+  let m;
+  while ((m = re.exec(half)) !== null) {
+    const token = m[1].replace(/\s+/g, ''); // "地下 1 階" -> "地下1階"
+    found.push(token);
   }
 
-  if (hall === "honkan") {
-    const prefix = "F00102";
-    if (info.kind === "B") {
-      if (info.n === 1) return prefix + "B01";
-      if (info.n === 2) return prefix + "B02";
-      return null;
-    }
-    if (info.kind === "F") {
-      const n = info.n;
-      if (n >= 1 && n <= 8) return prefix + "F" + String(n).padStart(2, "0");
-      return null;
-    }
-    if (info.kind === "R") return prefix + "R01";
-    return null;
-  }
-
-  if (hall === "toukan") {
-    const prefix = "F00103";
-    if (info.kind === "B") {
-      if (info.n === 1) return prefix + "B01";
-      if (info.n === 3) return prefix + "B03";
-      return null;
-    }
-    if (info.kind === "F") {
-      const n = info.n;
-      if (n >= 1 && n <= 6) return prefix + "F" + String(n).padStart(2, "0");
-      return null;
-    }
-    if (info.kind === "R") return prefix + "R01";
-    return null;
-  }
-
-  return null;
-}
-
-function uniqKeepOrder(arr) {
-  const out = [];
+  // 重複排除（順序は出現順）
+  const uniq = [];
   const seen = new Set();
-  for (const v of arr) {
-    if (!v) continue;
-    if (!seen.has(v)) { seen.add(v); out.push(v); }
+  for (const t of found) {
+    if (!seen.has(t)) { seen.add(t); uniq.push(t); }
   }
-  return out;
+  return uniq;
+}
+
+/**
+ * 抽出した階（地下1階/地下2階/1階〜14階）を
+ * CMS「新宿 館なし」側の option value に変換する
+ *
+ * ルール：
+ *  地下1階 -> F00201B01
+ *  地下2階 -> F00201B02
+ *  N階(1-14) -> F00201F + 2桁
+ */
+function mapFloorTokenToCmsValue(token) {
+  const t = String(token || "").trim();
+  if (!t) return null;
+
+  // 地下
+  const b = t.match(/^地下([0-9]{1,2})階$/);
+  if (b) {
+    const n = Number(b[1]);
+    if (n === 1) return "F00201B01";
+    if (n === 2) return "F00201B02";
+    return null; // 想定外はスキップ
+  }
+
+  // 地上
+  const f = t.match(/^([0-9]{1,2})階$/);
+  if (f) {
+    const n = Number(f[1]);
+    if (n >= 1 && n <= 14) {
+      return "F00201F" + String(n).padStart(2, "0");
+    }
+    return null;
+  }
+
+  return null;
 }
 
 function buildPayload() {
-  const storeKey = getSelectedStoreKey();
-
   const titleOutput = getValue('[data-set="title"] textarea.output');
   const dtFreeRaw = getValue('[data-set="kaiki"] .dt-free');
   const publicFrom = fmtDtFree(dtFreeRaw);
 
-  const kaikiOutput =
-    getValue('[data-set="kaiki"] textarea.output.kaiki-output') ||
-    getValue('[data-set="kaiki"] textarea.output');
+  const kaikiOutput = getValue('[data-set="kaiki"] textarea.output.kaiki-output') ||
+                      getValue('[data-set="kaiki"] textarea.output');
 
   const startStr = getValue('[data-set="kaiki"] textarea.date-start');
   const endStr   = getValue('[data-set="kaiki"] textarea.date-end');
 
+  // 会場（出力）から階を抽出 → CMS value に変換（null除外）
   const venueOut = getValue('[data-set="venue"] textarea.output');
-  const venueLines = getVenueLines(venueOut);
+  const floorTokens = extractFloorsFromVenueText(venueOut);
+  const floorValues = floorTokens
+    .map(mapFloorTokenToCmsValue)
+    .filter(v => !!v);
 
-  let floorValues = [];
-  if (storeKey === "shinjuku") {
-    floorValues = uniqKeepOrder(venueLines.map(mapShinjukuFloorValue));
-  } else if (storeKey === "nihonbashi") {
-    floorValues = uniqKeepOrder(venueLines.map(mapNihonbashiFloorValue));
+  // 重複排除（念のため）
+  const uniqFloorValues = [];
+  const seen = new Set();
+  for (const v of floorValues) {
+    if (!seen.has(v)) { seen.add(v); uniqFloorValues.push(v); }
   }
 
   return {
-    storeKey,
-
     titleText: titleOutput,
     publicFromDate: publicFrom,
     periodText: kaikiOutput,
@@ -204,7 +130,8 @@ function buildPayload() {
     articleToDate: endStr,
     publicToDate: endStr,
 
-    floorValues
+    // フロア（CMS option value 配列）
+    floorValues: uniqFloorValues
   };
 }
 
@@ -229,8 +156,12 @@ function insertToCmsButton() {
   btn.addEventListener('click', async (e) => {
     e.preventDefault();
     const payload = buildPayload();
+
     try {
-      await chrome.runtime.sendMessage({ type: "KOMA_SEND_TO_CMS", payload });
+      await chrome.runtime.sendMessage({
+        type: "KOMA_SEND_TO_CMS",
+        payload
+      });
     } catch {
       // 仕様：通知なし
     }
