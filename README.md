@@ -180,3 +180,170 @@ HTML 冒頭とヘッダーに **同一のバージョン番号**を表示しま�
 ```html
 <!-- Text Formatter v1.0.6 - 2026-01-05 -->
 <meta name="app-version" content="v1.0.6">
+
+---
+
+## 7. KoMaTukuru → CMS 自動入力（Chrome拡張による流し込み）
+
+### 7.1 目的
+KoMaTukuruで整形した結果を、別タブで開いている CMS（記事新規作成画面）の複数フォームへ **ワンクリックで自動入力**するための仕組みです。  
+運用は Chrome のウインドウ（またはタブ）を2つ開き、KoMaTukuru と CMS を同時に表示して行います。
+
+### 7.2 技術的な方式（全体像）
+Chrome拡張（Manifest V3）で、**3つの役割**に分けて実装します。
+
+- **koma_inject（KoMaTukuru側のコンテンツスクリプト）**
+  - KoMaTukuruのUIへ `toCMS` ボタンを追加（タイトルセットの変換ボタン左）
+  - ボタン押下で、KoMaTukuruの各出力欄から値を収集して「送信データ」を生成
+  - `chrome.runtime.sendMessage()` で background に送信
+
+- **background（中継・タブ特定）**
+  - 「最後に触ったCMSタブ」を記憶（ユーザーが操作したCMSタブを優先）
+  - KoMaTukuruから受け取った送信データを、そのCMSタブへ `chrome.tabs.sendMessage()` で中継
+
+- **cms_inject（CMS側のコンテンツスクリプト）**
+  - CMSのフォーム要素を `id`（または安全なセレクタ）で取得し、値を反映
+  - **空欄のときだけ入力**して事故を防止
+  - 入力後に `input` / `change` 等のイベントを発火して、CMS側のバリデーションやUI更新を確実に動かす
+  - 反映完了後、簡易ダイアログを表示（例：「タイトルが入力完了」＋OK）
+
+> iframe ではない想定で、通常の DOM への入力として扱います（記事本文編集の Broccoli iframe は今回の対象外）。
+
+---
+
+### 7.3 対象URL（誤爆防止）
+拡張が入力を行うのは、次の **共通プレフィックス** に一致する「記事新規作成画面」のみです。  
+`&category=` 以降が変わっても対象になります。
+
+- **新宿（store_id=2 / suffix=1）**  
+  `https://cmstakashimaya.com/webadmin/addon/store/article/create/?store_id=2&store_suffix_number=1`
+
+- **日本橋（store_id=1 / suffix=2）**  
+  `https://cmstakashimaya.com/webadmin/addon/store/article/create/?store_id=1&store_suffix_number=2`
+
+---
+
+### 7.4 KoMaTukuru → CMS の入力マッピング（基本）
+KoMaTukuruのどの値を、CMSのどの入力欄へ入れるかの対応表です。
+
+- **タイトル（KoMaTukuru：タイトルセット出力）**
+  - → CMS `管理名`（`#manage_name_name`）
+  - → CMS `タイトル`（`#title`）
+
+- **公開開始日時（KoMaTukuru：会期の dt-free）**
+  - → CMS `公開開始日時`（`#public_from_date`）  
+  - 形式は **`YYYY/MM/DD HH:mm`**（例：`2026/01/19 12:30`）をそのまま使用
+
+- **会期（KoMaTukuru：会期セット出力 kaiki-output）**
+  - → CMS `会期`（`#period`）
+
+- **開催開始日時（KoMaTukuru：会期 date-start）**
+  - → CMS `開催開始日時`（`#article_from_date`）
+
+- **開催終了日時（KoMaTukuru：会期 date-end）**
+  - → CMS `開催終了日時`（`#article_to_date`）
+  - → CMS `公開終了日時`（`#public_to_date`）
+
+---
+
+### 7.5 フロア（会場 → 階抽出 → select 選択）
+KoMaTukuruには「フロア」専用項目がないため、**会場出力から抽出**して CMS のフロア select を選択します。
+
+#### 7.5.1 階の抽出ルール（会場テキスト）
+会場出力（`[data-set="venue"] textarea.output`）の各行から、次を抽出します。
+
+- `地下N階`（例：`地下1階`）
+- `N階`（例：`6階`）
+- `屋上`（日本橋のみ出現しうる）
+
+例：
+- `■地下1階［Takase］` → `地下1階`
+- `■オム・メゾン6階 紳士鞄` → `6階`
+
+#### 7.5.2 新宿のマッピング
+運用上 **南館は使わない**ため、必ず **「館なし」** を選びます。
+
+- `地下1階` → `新宿 館なし 地下1階`
+- `1階` → `新宿 館なし 1階`
+- …
+- `14階` → `新宿 館なし 14階`
+
+#### 7.5.3 日本橋のマッピング
+日本橋は会場行に **館名（本館/新館/東館）** が必ず入る運用ルール。  
+したがって **「館名 + 階」** をキーにして select を選択します。
+
+入力例：
+- `■本館1階 婦人服` → `日本橋 本館 1階`
+- `■本館地下1階 惣菜［ブランド］` → `日本橋 本館 地下1階`
+- `■新館5階 …` → `日本橋 新館 5階`
+- `■東館屋上 …` → `日本橋 東館 屋上`
+
+> 日本橋は同じ階が複数館に存在するため、「階だけ一致」では誤選択になります。必ず館名込みで一致させます。
+
+---
+
+### 7.6 入力の確定（イベント発火とUI依存への対応）
+CMS側は datetimepicker や validationEngine を使っているため、単に `value` を入れるだけでなく、次を行う前提です。
+
+- `el.value = "..."` の後に
+  - `el.dispatchEvent(new Event("input", {bubbles:true}))`
+  - `el.dispatchEvent(new Event("change", {bubbles:true}))`
+  を発火して確定させる
+
+これにより、
+- バリデーション（required / past / future など）
+- カレンダーUIの内部状態
+- 保存ボタン有効化など
+が正しく追従しやすくなります。
+
+---
+
+### 7.7 事故防止（ここ重要）
+運用方針として、次の安全策を必須にします。
+
+- **空欄の入力欄にだけ反映**
+  - 既に値が入っている欄は上書きしない
+- **対象URLに一致しないページでは何もしない**
+- **送り先は「最後に触ったCMSタブ」**
+  - 2画面運用時、現在ユーザーが触っているCMSを優先して誤爆を避ける
+
+---
+
+### 7.8 操作フロー（運用手順）
+1. Chromeで **KoMaTukuru** を開く（GitHub Pages）
+2. 別ウインドウ（または別タブ）で **CMSの新規作成画面** を開く
+3. 先に CMS 側の対象ページを一度クリックして「最後に触ったCMS」にする
+4. KoMaTukuruで整形（必要なら会期→会場の順など、通常運用どおり）
+5. KoMaTukuruの `toCMS` を押す
+6. CMS側の対象欄が自動入力され、最後に簡易ダイアログが出る（OKで閉じる）
+
+---
+
+### 7.9 KoMaTukuru側の参照DOM（前提）
+拡張は KoMaTukuru側で主に次の要素を参照します。  
+`index.html` の構造を大きく変える場合、拡張側セレクタも更新が必要です。
+
+- タイトル出力：`[data-set="title"] textarea.output`
+- dt-free：`[data-set="kaiki"] .dt-free`
+- 会期出力：`[data-set="kaiki"] textarea.output.kaiki-output`
+- 開始日：`[data-set="kaiki"] textarea.date-start`
+- 終了日：`[data-set="kaiki"] textarea.date-end`
+- 会場出力：`[data-set="venue"] textarea.output`
+
+---
+
+### 7.10 CMS側の参照DOM（新宿CMSの例）
+今回提示された HTML 断片から、対象になっている主な入力欄は次です。
+
+- 管理名：`#manage_name_name`
+- 公開開始日時：`#public_from_date`
+- 公開終了日時：`#public_to_date`
+- タイトル：`#title`
+- 会期：`#period`
+- 開催開始日時：`#article_from_date`
+- 開催終了日時：`#article_to_date`
+- フロア：`#article_floor`（`multiple`）
+
+> `multiple` のため、将来「会場に複数行ある → フロア複数選択」に拡張可能です（現状は運用ルールに合わせて必要最小の選択でもOK）。
+
+---
