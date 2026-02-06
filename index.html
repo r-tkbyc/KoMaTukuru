@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Text Formatter v1.0.6 - 2026-01-05 -->
-  <meta name="app-version" content="v1.0.6">
+  <!-- Text Formatter v2.0.1 - 2026-02-06 -->
+  <meta name="app-version" content="v2.0.1">
   
   <title>KoMaTukuru テキスト整形ツール</title>
   <style>
@@ -134,7 +134,7 @@
 
   /* 店舗ラジオ：チェック時の色 */
   .store-group input[type="radio"]{
-    accent-color: #2a81fb; /* 好きな色に変更可 */
+    accent-color: #2a81fb;
   }
   </style>
 </head>
@@ -269,8 +269,8 @@
   <div class="toast" id="toast"></div>
 
   <script>
-  const APP_VERSION = "v1.0.6";
-  const APP_BUILD = "2026-01-05";
+  const APP_VERSION = "v2.0.1";
+  const APP_BUILD = "2026-02-06";
 
   // 価格直前の全角スペース付与を将来再有効化できるように保持
   const PRICE_SPACE_RULE_ENABLED = false;
@@ -282,11 +282,18 @@
     const el = document.getElementById("ver");
     if (el) el.textContent = `${APP_VERSION} (${APP_BUILD})`;
   });
+
   // =============================
   //  ルール適用パイプライン（全体）
   //  今後の正規表現ルールは rulesGlobal に関数追加
   // =============================
   const rulesGlobal = [];
+
+  // 0) Excelコピー等で混入するTAB（\t）を半角スペースへ（連続TABも半角スペース1個）
+  rulesGlobal.push(function tabToSpace(s){
+    return String(s || '').replace(/\t+/g, ' ');
+  });
+
   // 1) URL保護＋URL内の全角→半角
   rulesGlobal.push(function urlProtect(s){
     const urlRegex = /(https?:\/\/[!-~]+)/g;
@@ -302,6 +309,7 @@
     });
     return { text: out, ctx: { urls: bucket } };
   });
+
   // 1.5) 計量単位の互換文字 → ASCII（㎝, ㎖, ㎜）
   rulesGlobal.push(function siCompatUnits(s){
     // U+339D: ㎝, U+3396: ㎖, U+339C: ㎜
@@ -309,17 +317,19 @@
                         .replace(/\u3396/g, 'ml')
                         .replace(/\u339C/g, 'mm');
   });
+
   // 1.2) ［］は常に全角、～は常に全角（URLはurlProtectで保護済み）
   rulesGlobal.push(function fullwidthBracketsAndWave(s){
     return String(s||'')
       // 半角角カッコ → 全角
       .replace(/\[/g, '［')
       .replace(/\]/g, '］')
-      // 半角チルダ "~" と JIS波ダッシュ "〜" → 全角チルダ "～"
+      // 半角チルダ "~" と JIS波ダッシュ "〜" → 全角チルダ "～" に統一
       .replace(/[\u007E\u301C]/g, '～')
       // 半角矢印 "→" も全角チルダ "～" に統一
       .replace(/→/g, '～');
   });
+
   // 2.x) 用語ゆれ・表記統一（全体適用）
   // ※順序注意：POPUPSTORE → POPUPSHOP → POPUP の順でマッチさせる
   rulesGlobal.push(function lexicalReplacements(s){
@@ -378,11 +388,6 @@
     return String(s || '').replace(/\bTEL[:：]/g, 'TEL：');
   });
 
-  // Excelコピー等で混ざる TAB を半角スペースへ（連続TABもスペース1個）
-  rulesGlobal.push(function tabToSpace(s){
-    return String(s || '').replace(/\t+/g, ' ');
-  });
-
   // 3) スペース/改行ルール
   rulesGlobal.push(function spaceBreak(s){
     return s
@@ -392,28 +397,24 @@
 
   // 3.5) 価格の直前に全角スペースを付与（「税込…円以上」は除外）
   rulesGlobal.push(function ensureZenkakuSpaceBeforePrice(s){
-    if (!PRICE_SPACE_RULE_ENABLED) return s;  // ← これを先頭に追加
+    if (!PRICE_SPACE_RULE_ENABLED) return s;
     const str = String(s || '');
-    // 先頭の空白（半/全角）+ 数字（カンマ区切りOK）+ 「円」
     const priceRe = /([ 　]*)(\d{1,3}(?:,\d{3})+|\d+)([ 　]*円)/g;
 
     return str.replace(priceRe, (match, ws, num, yenPart, offset) => {
       const prev = str.slice(0, offset);
       const next = str.slice(offset + match.length);
 
-      // 「税込」直後かつ「円」の直後が「以上」→除外
       if (prev.endsWith('税込') && next.startsWith('以上')) {
         return match;
       }
 
-      // 行頭/改行直後は視認性のため挿入しない（必要ならここを '　' + ... に変更）
       const prevChar = prev.slice(-1);
       const atLineStart = offset === 0 || prevChar === '\n' || prevChar === '\r';
       if (atLineStart) {
         return `${num}${yenPart}`;
       }
 
-      // それ以外は直前を必ず全角スペース1つに統一
       return `　${num}${yenPart}`;
     });
   });
@@ -425,7 +426,6 @@
 
   // 変換エントリ（全体ルール適用）
   function transform(text){
-    // パイプラインを順に適用、ctxを共有
     let ctx = {};
     let current = String(text||'');
     for (const rule of rulesGlobal){
@@ -447,30 +447,21 @@
   const _toHalfDigits = (s)=>String(s||'').replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFEE0));
 
   function _getSelectedStore(){
-    // デフォルトは 'shinjuku'
     return document.querySelector('input[name="store"]:checked')?.value || 'shinjuku';
   }
 
-  /**
-   * 店舗と曜日に応じた既定の終了時刻（※があれば overrideHM が最優先）
-   * 優先度: 会期※ > 会場※ > 店舗デフォルト
-   */
   function _defaultEndHMByStore(endDate, overrideHM){
-    // 1) 会期の※（行末注記）
     if (overrideHM) return overrideHM;
-
-    // 2) 会場由来の上書き
     if (window._venueEndHMOverride) return window._venueEndHMOverride;
 
-    // 3) 店舗デフォルト（従来挙動）
-    const store = _getSelectedStore();      // 'shinjuku' | 'nihonbashi'
-    const isTue = endDate.getDay() === 2;   // 火曜？
+    const store = _getSelectedStore();
+    const isTue = endDate.getDay() === 2;
 
     let hh = 19, mm = 30;
     if (store === 'shinjuku') {
       hh = isTue ? 17 : 19;
     } else if (store === 'nihonbashi') {
-      hh = 19; // 火曜でも 19:30
+      hh = 19;
     }
     return { hh, mm };
   }
@@ -483,7 +474,6 @@
     return s;
   }
 
-  // 範囲（～）
   function _parseRange(raw, baseYear){
     const s = _normalize(raw);
     const i = s.indexOf('～'); if (i === -1) return null;
@@ -530,14 +520,12 @@
     };
   }
 
-  // 列挙（・）
   function _parseList(raw, baseYear){
     if (!raw || raw.indexOf('・') === -1) return null;
     let s = _toHalfDigits(raw);
     s = s.split('(').join('（').split(')').join('）').replace(/[ 　]/g,'');
     if (s.startsWith('■')) s = s.slice(1);
 
-    // 括弧外の「・」で分割
     const parts = (() => {
       const out=[]; let buf=''; let depth=0;
       for (const ch of s){
@@ -587,7 +575,6 @@
     };
   }
 
-  // 単日
   function _parseSingle(raw, baseYear){
     let s = _toHalfDigits(raw||'');
     s = s.replace(/^\s*■/,'');
@@ -616,7 +603,6 @@
     };
   }
 
-  // 「開催中～○月○日」専用（右側のみ解析）
   function _parseRightOnly(raw, baseYear){
     const n = _normalize(raw||'');
     const i = n.indexOf('～'); if (i===-1) return null;
@@ -646,16 +632,13 @@
     return _fmt(y, m, d, endHM.hh, endHM.mm);
   }
 
-  // 文末※（テキスト保持＆終了時刻上書き抽出）
   function _extractNote(src){
     const s = String(src || '');
     const m = s.match(/[ 　]*[＊*※]\s*(.+)$/);
     if (!m) return { text:'', endHM:null };
 
-    // 表示用の元テキスト（※を付ける）
     const text = '※' + m[1].trim();
 
-    // 時刻抽出用に数字だけ半角へ正規化して判定（午後４時 等に対応）
     const normalized = _toHalfDigits(text);
     const tm = normalized.match(/(午前|午後)\s*([0-9]{1,2})\s*時(?:\s*([0-9]{1,2})\s*分)?/);
     if (!tm) return { text, endHM:null };
@@ -667,7 +650,6 @@
   }
   function _stripNote(src){ return String(src||'').replace(/[ 　]*[＊*※].+$/,''); }
 
-  // 会場：先頭に■付与
   function ensureVenueBullets(text){
     if(!text) return '';
     return String(text).split(/\r?\n/).map(line=>{
@@ -704,7 +686,7 @@
       const setName = setEl.getAttribute('data-set');
 
       if(setName === 'kaiki'){
-        const baseYear = els.yearSel ? Number(els.yearSel.value) : 2026; // ← 既定年フォールバックを 2026 に
+        const baseYear = els.yearSel ? Number(els.yearSel.value) : 2026;
         const lines = String(src).split(/\r?\n/).filter(l => l.trim() !== '');
         const outLines = []; const startLines = []; const endLines = [];
 
@@ -713,7 +695,6 @@
           const core = _stripNote(lineRaw);
           let handled=false, outLine='', startStr='', endStr='';
 
-          // A) 開催中～
           const nrm = _normalize(core);
           const sep = nrm.indexOf('～');
           if (!handled && sep !== -1 && nrm.slice(0,sep) === '開催中'){
@@ -727,7 +708,6 @@
             }
           }
 
-          // B) 列挙（・）
           if(!handled && core.includes('・')){
             const list=_parseList(core, baseYear);
             if(list){
@@ -739,7 +719,6 @@
             }
           }
 
-          // C) 範囲（～）
           if(!handled && nrm.includes('～')){
             const info=_parseRange(core, baseYear);
             if(info){
@@ -751,7 +730,6 @@
             }
           }
 
-          // D) 単日
           if(!handled){
             const one=_parseSingle(core, baseYear);
             if(one){
@@ -763,7 +741,6 @@
             }
           }
 
-          // E) フォールバック（全体ルール整形 + ※前半角スペース + 先頭■付与）
           if(!handled){
             let t = transform(lineRaw);
             t = t.replace(/[ 　]*(※|\*|＊)/, ' $1');
@@ -771,7 +748,6 @@
             outLine = t;
           }
 
-          // 入力に「開催中」が含まれていたら必ず含める
           const raw = String(lineRaw);
           if (raw.includes('開催中～') || raw.includes('開催中→')) {
             if (!outLine.includes('開催中～')) {
@@ -796,9 +772,8 @@
       if(setName === 'venue'){
         const base = transform(src);
 
-        // --- 追加: 会場行の※から終了時刻を集約（最も早い時刻を採用） ---
         const lines = String(src || '').split(/\r?\n/);
-        let picked = null; // {hh, mm}
+        let picked = null;
         for (const ln of lines){
           const note = _extractNote(ln);
           if (note.endHM){
@@ -806,17 +781,15 @@
             else {
               const a = picked.hh*60 + picked.mm;
               const b = note.endHM.hh*60 + note.endHM.mm;
-              if (b < a) picked = note.endHM; // 早い方を採用
+              if (b < a) picked = note.endHM;
             }
           }
         }
         window._venueEndHMOverride = picked || null;
 
-        // 既存の会場出力
         els.output.value = ensureVenueBullets(base);
         toast('変換しました');
 
-        // --- 追加: 会期入力があれば自動で再変換して時刻へ反映 ---
         const kaikiSet = document.querySelector('[data-set="kaiki"]');
         if (kaikiSet){
           const kaikiInput = kaikiSet.querySelector('.input');
@@ -829,7 +802,6 @@
       }
 
       if (setName === 'honbun') {
-        // 本文：会期/会場を<p>で挿入 → 空行 <p><br></p> → 本文全体を<p>...</p>で囲み、各行末に<br>
         const kaikiOutEl = document.querySelector('[data-set="kaiki"] .output');
         const venueOutEl = document.querySelector('[data-set="venue"] .output');
         const kaikiVal = (kaikiOutEl && kaikiOutEl.value) ? kaikiOutEl.value : '';
@@ -837,7 +809,6 @@
 
         const outLines = [];
 
-        // 先頭に会期/会場を <p> で挿入
         if (kaikiVal.trim()) {
           kaikiVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
         }
@@ -845,10 +816,8 @@
           venueVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
         }
 
-        // 空行 <p><br></p>
         outLines.push('<p><br></p>');
 
-        // 本文全体を <p> ... </p> で囲む（各行末に <br>、空行は <br> のみ）
         const body = transform(src || '');
         const bodyLines = body.split(/\r?\n/);
         let para = '<p>\n';
@@ -867,7 +836,6 @@
         return;
       }
 
-      // タイトル（その他）
       els.output.value = transform(src);
       toast('変換しました');
     }
@@ -910,20 +878,17 @@
   }
 
   [...document.querySelectorAll('.set')].map(makeSetController);
+
   // v1.0.1: バージョン表記（右上）をクリアボタンとして機能させる（会期タイトル右横 .dt-free と 年セレクト と 店舗ラジオだけ保持）
   (function(){
     function clearAllExceptDtFreeAndStore(){
       var nodes = document.querySelectorAll('input, textarea, select');
       nodes.forEach(function(el){
-        // dt-free は保持
         if (el.classList.contains('dt-free')) return;
-        // 店舗ラジオボタンも保持
         if (el.type === 'radio' && el.name === 'store') return;
-        // 年セレクト（基準年）も保持
         if (el.classList && el.classList.contains('year-select')) return;
 
         if (el.tagName === 'SELECT') {
-          // 他のセレクトのみ初期化（year-select は上で return 済み）
           el.selectedIndex = 0;
         } else if (el.type === 'checkbox' || el.type === 'radio') {
           el.checked = false;
@@ -931,7 +896,6 @@
           el.value = '';
         }
       });
-      // 追加: 会場由来の上書きもリセット
       window._venueEndHMOverride = null;
       if (typeof toast === 'function') toast('クリアしました');
     }
