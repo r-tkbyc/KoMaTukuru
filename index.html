@@ -378,9 +378,9 @@
     return String(s || '').replace(/\bTEL[:：]/g, 'TEL：');
   });
 
-  // Excelコピー等で混ざる TAB を半角スペースへ
+  // Excelコピー等で混ざる TAB を半角スペースへ（連続TABもスペース1個）
   rulesGlobal.push(function tabToSpace(s){
-    return String(s || '').replace(/\t/g, ' ');
+    return String(s || '').replace(/\t+/g, ' ');
   });
 
   // 3) スペース/改行ルール
