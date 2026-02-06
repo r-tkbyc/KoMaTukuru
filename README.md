@@ -177,7 +177,7 @@
 HTML 冒頭とヘッダーに **同一のバージョン番号**を表示します。既存ファイルに以下を追記してください。
 
 ### 6.1 `<head>` に追記
-```html
+```html```
 <!-- Text Formatter v1.0.6 - 2026-01-05 -->
 <meta name="app-version" content="v1.0.6">
 
