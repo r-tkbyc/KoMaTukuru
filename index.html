@@ -6,7 +6,7 @@
 
   <!-- Text Formatter v2.0.1 - 2026-02-06 -->
   <meta name="app-version" content="v2.0.1">
-  
+
   <title>KoMaTukuru テキスト整形ツール</title>
   <style>
   :root { --gap: 8px; }
@@ -150,7 +150,8 @@
       <div class="set-head">
         <h2 class="set-title">タイトル</h2>
         <div class="actions">
-          <button class="btn-convert primary" title="変換（Ctrl/Cmd+Enter）">&nbsp;変換&nbsp;</button>
+          <!-- v2.0.1: タイトルの変換ボタン = 全体変換ボタン -->
+          <button class="btn-convert primary" title="全て変換（Ctrl/Cmd+Enter）">&nbsp;変換&nbsp;</button>
           <button class="btn-copy" title="コピー">コピー</button>
         </div>
       </div>
@@ -191,7 +192,7 @@
               <option value="2030">2030</option>
             </select>
           </label>
-          <button class="btn-convert primary" title="変換（Ctrl/Cmd+Enter)">&nbsp;変換&nbsp;</button>
+          <!-- v2.0.1: 会期の変換ボタンは撤去 -->
           <button class="btn-copy" title="コピー">コピー</button>
         </div>
       </div>
@@ -228,7 +229,7 @@
       <div class="set-head">
         <h2 class="set-title">会場</h2>
         <div class="actions">
-          <button class="btn-convert primary" title="変換（Ctrl/Cmd+Enter）">&nbsp;変換&nbsp;</button>
+          <!-- v2.0.1: 会場の変換ボタンは撤去 -->
           <button class="btn-copy" title="コピー">コピー</button>
         </div>
       </div>
@@ -249,7 +250,7 @@
       <div class="set-head">
         <h2 class="set-title">本文</h2>
         <div class="actions">
-          <button class="btn-convert primary" title="変換（Ctrl/Cmd+Enter）">&nbsp;変換&nbsp;</button>
+          <!-- v2.0.1: 本文の変換ボタンは撤去 -->
           <button class="btn-copy" title="コピー">コピー</button>
         </div>
       </div>
@@ -285,12 +286,11 @@
 
   // =============================
   //  ルール適用パイプライン（全体）
-  //  今後の正規表現ルールは rulesGlobal に関数追加
   // =============================
   const rulesGlobal = [];
 
-  // 0) Excelコピー等で混入するTAB（\t）を半角スペースへ（連続TABも半角スペース1個）
-  rulesGlobal.push(function tabToSpace(s){
+  // 0) Excel等由来のTABを半角スペースへ（連続TABもスペース1個）
+  rulesGlobal.push(function tabsToSpace(s){
     return String(s || '').replace(/\t+/g, ' ');
   });
 
@@ -312,7 +312,6 @@
 
   // 1.5) 計量単位の互換文字 → ASCII（㎝, ㎖, ㎜）
   rulesGlobal.push(function siCompatUnits(s){
-    // U+339D: ㎝, U+3396: ㎖, U+339C: ㎜
     return String(s||'').replace(/\u339D/g, 'cm')
                         .replace(/\u3396/g, 'ml')
                         .replace(/\u339C/g, 'mm');
@@ -321,25 +320,18 @@
   // 1.2) ［］は常に全角、～は常に全角（URLはurlProtectで保護済み）
   rulesGlobal.push(function fullwidthBracketsAndWave(s){
     return String(s||'')
-      // 半角角カッコ → 全角
       .replace(/\[/g, '［')
       .replace(/\]/g, '］')
-      // 半角チルダ "~" と JIS波ダッシュ "〜" → 全角チルダ "～" に統一
       .replace(/[\u007E\u301C]/g, '～')
-      // 半角矢印 "→" も全角チルダ "～" に統一
       .replace(/→/g, '～');
   });
 
   // 2.x) 用語ゆれ・表記統一（全体適用）
-  // ※順序注意：POPUPSTORE → POPUPSHOP → POPUP の順でマッチさせる
   rulesGlobal.push(function lexicalReplacements(s){
     return String(s || '')
-      // 英字（大文字固定の指定どおり。小文字や混在大小は変更しません）
       .replace(/POPUPSTORE/g, 'POP UP STORE')
       .replace(/POPUPSHOP/g, 'POP UP SHOP')
       .replace(/POPUP/g, 'POP UP')
-
-      // 和文
       .replace(/是非/g, 'ぜひ')
       .replace(/くださいませ/g, 'ください')
       .replace(/お買い上げ/g, 'お買上げ')
@@ -361,7 +353,6 @@
     let body = toHalfAlnum(s);
     body = toFullWidthSymbols(body);
     body = toHalfDigits(body);
-    // 括弧・記号の個別置換
     body = body
       .replace(/\(/g,'（').replace(/\)/g,'）')
       .replace(/\[/g,'［').replace(/\]/g,'］')
@@ -371,10 +362,9 @@
       .replace(/≪/g,'《').replace(/≫/g,'》')
       .replace(/【/g,'〔').replace(/】/g,'〕')
       .replace(/\*/g,'※').replace(/＊/g,'※');
-    // 連続英数字の中に入る記号の半角統一
+
     body = body.replace(/[A-Za-z0-9０-９]+[\p{P}\p{S}]+(?=[A-Za-z0-9０-９]+)/gu, seg =>
       seg.replace(/[！-～]/g, ch => {
-        // 括弧類は常に全角で保持（英数字に挟まれていても半角に戻さない）
         const keep = '（）［］｛｝「」『』《》〔〕〈〉';
         if (keep.includes(ch)) return ch;
         return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0);
@@ -383,19 +373,19 @@
     return body;
   });
 
-  // 2.5) TEL のコロンは必ず全角に固定（widthNorm の後に実行して確定させる）
+  // 2.5) TEL のコロンは必ず全角に固定
   rulesGlobal.push(function fixTelColon(s){
     return String(s || '').replace(/\bTEL[:：]/g, 'TEL：');
   });
 
   // 3) スペース/改行ルール
   rulesGlobal.push(function spaceBreak(s){
-    return s
+    return String(s||'')
       .replace(/[ 　]+/g,' ')
       .replace(/(\r?\n){3,}/g,'\n\n');
   });
 
-  // 3.5) 価格の直前に全角スペースを付与（「税込…円以上」は除外）
+  // 3.5) 価格の直前に全角スペース付与（無効化フラグあり）
   rulesGlobal.push(function ensureZenkakuSpaceBeforePrice(s){
     if (!PRICE_SPACE_RULE_ENABLED) return s;
     const str = String(s || '');
@@ -405,15 +395,11 @@
       const prev = str.slice(0, offset);
       const next = str.slice(offset + match.length);
 
-      if (prev.endsWith('税込') && next.startsWith('以上')) {
-        return match;
-      }
+      if (prev.endsWith('税込') && next.startsWith('以上')) return match;
 
       const prevChar = prev.slice(-1);
       const atLineStart = offset === 0 || prevChar === '\n' || prevChar === '\r';
-      if (atLineStart) {
-        return `${num}${yenPart}`;
-      }
+      if (atLineStart) return `${num}${yenPart}`;
 
       return `　${num}${yenPart}`;
     });
@@ -424,15 +410,15 @@
     return String(s||'').replace(/⟦URL(\d+)⟧/g, (_, i) => (ctx.urls||[])[Number(i)] ?? '');
   });
 
-  // 変換エントリ（全体ルール適用）
   function transform(text){
     let ctx = {};
     let current = String(text||'');
     for (const rule of rulesGlobal){
-      if (typeof rule === 'function'){
-        const r = rule(current, ctx);
-        if (typeof r === 'string'){ current = r; }
-        else if (r && typeof r === 'object' && 'text' in r){ current = r.text; ctx = { ...(ctx||{}), ...(r.ctx||{}) }; }
+      const r = rule(current, ctx);
+      if (typeof r === 'string') current = r;
+      else if (r && typeof r === 'object' && 'text' in r){
+        current = r.text;
+        ctx = { ...(ctx||{}), ...(r.ctx||{}) };
       }
     }
     return current;
@@ -454,14 +440,14 @@
     if (overrideHM) return overrideHM;
     if (window._venueEndHMOverride) return window._venueEndHMOverride;
 
-    const store = _getSelectedStore();
-    const isTue = endDate.getDay() === 2;
+    const store = _getSelectedStore();      // 'shinjuku' | 'nihonbashi'
+    const isTue = endDate.getDay() === 2;   // 火曜？
 
     let hh = 19, mm = 30;
     if (store === 'shinjuku') {
       hh = isTue ? 17 : 19;
     } else if (store === 'nihonbashi') {
-      hh = 19;
+      hh = 19; // 火曜でも 19:30
     }
     return { hh, mm };
   }
@@ -638,7 +624,6 @@
     if (!m) return { text:'', endHM:null };
 
     const text = '※' + m[1].trim();
-
     const normalized = _toHalfDigits(text);
     const tm = normalized.match(/(午前|午後)\s*([0-9]{1,2})\s*時(?:\s*([0-9]{1,2})\s*分)?/);
     if (!tm) return { text, endHM:null };
@@ -660,7 +645,7 @@
   }
 
   // =============================
-  //  UI コントローラ
+  //  UI
   // =============================
   const toastEl = document.getElementById('toast');
   function toast(msg){
@@ -670,222 +655,278 @@
     toast._t = setTimeout(()=>toastEl.classList.remove('show'), 1200);
   }
 
-  function makeSetController(setEl){
-    const $ = (sel)=>setEl.querySelector(sel);
-    const els = {
-      input: $('.input'), output: $('.output'),
-      convert: $('.btn-convert'), copy: $('.btn-copy'),
-      startField: $('.date-start'), endField: $('.date-end'),
-      copyStart: $('.btn-copy-start'), copyEnd: $('.btn-copy-end'),
-      yearSel: $('.year-select'),
-      dtFree: $('.dt-free'), copyDtFree: $('.btn-copy-dtfree'),
-    };
-
-    function onConvert(){
-      const src = els.input.value || '';
-      const setName = setEl.getAttribute('data-set');
-
-      if(setName === 'kaiki'){
-        const baseYear = els.yearSel ? Number(els.yearSel.value) : 2026;
-        const lines = String(src).split(/\r?\n/).filter(l => l.trim() !== '');
-        const outLines = []; const startLines = []; const endLines = [];
-
-        for(const lineRaw of lines){
-          const note = _extractNote(lineRaw);
-          const core = _stripNote(lineRaw);
-          let handled=false, outLine='', startStr='', endStr='';
-
-          const nrm = _normalize(core);
-          const sep = nrm.indexOf('～');
-          if (!handled && sep !== -1 && nrm.slice(0,sep) === '開催中'){
-            const right = _parseRightOnly(core, baseYear);
-            if (right){
-              outLine = '■開催中～' + _outRightOnly(right);
-              if (note.text) outLine += ' ' + transform(note.text);
-              startStr = '';
-              endStr   = _endStrFor(right.y, right.m, right.d, note.endHM||null);
-              handled = true;
-            }
-          }
-
-          if(!handled && core.includes('・')){
-            const list=_parseList(core, baseYear);
-            if(list){
-              const t=_timesList(list, note.endHM||null);
-              if(t){ startStr=t.startStr; endStr=t.endStr; }
-              outLine=_outList(list);
-              if (note.text) outLine += ' ' + transform(note.text);
-              handled=true;
-            }
-          }
-
-          if(!handled && nrm.includes('～')){
-            const info=_parseRange(core, baseYear);
-            if(info){
-              const t=_timesRange(info, note.endHM||null);
-              if(t){ startStr=t.startStr; endStr=t.endStr; }
-              outLine=_outRange(info);
-              if (note.text) outLine += ' ' + transform(note.text);
-              handled=true;
-            }
-          }
-
-          if(!handled){
-            const one=_parseSingle(core, baseYear);
-            if(one){
-              const t=_timesSingle(one, note.endHM||null);
-              if(t){ startStr=t.startStr; endStr=t.endStr; }
-              outLine=_outSingle(one);
-              if (note.text) outLine += ' ' + transform(note.text);
-              handled=true;
-            }
-          }
-
-          if(!handled){
-            let t = transform(lineRaw);
-            t = t.replace(/[ 　]*(※|\*|＊)/, ' $1');
-            if(!t.trim().startsWith('■')) t = '■' + t.trimStart();
-            outLine = t;
-          }
-
-          const raw = String(lineRaw);
-          if (raw.includes('開催中～') || raw.includes('開催中→')) {
-            if (!outLine.includes('開催中～')) {
-              outLine = outLine.replace(/^■(?:開催中[ 　]?)*?/, '■開催中～');
-            }
-          } else if (raw.includes('開催中')) {
-            if (!outLine.includes('開催中')) {
-              outLine = outLine.replace(/^■/, '■開催中 ');
-            }
-          }
-          outLines.push(outLine);
-          startLines.push(startStr||'');
-          endLines.push(endStr||'');
-        }
-
-        els.output.value = outLines.join('\n');
-        if(els.startField) els.startField.value = startLines.join('\n');
-        if(els.endField)   els.endField.value   = endLines.join('\n');
-        toast('変換しました'); return;
-      }
-
-      if(setName === 'venue'){
-        const base = transform(src);
-
-        const lines = String(src || '').split(/\r?\n/);
-        let picked = null;
-        for (const ln of lines){
-          const note = _extractNote(ln);
-          if (note.endHM){
-            if (!picked) picked = note.endHM;
-            else {
-              const a = picked.hh*60 + picked.mm;
-              const b = note.endHM.hh*60 + note.endHM.mm;
-              if (b < a) picked = note.endHM;
-            }
-          }
-        }
-        window._venueEndHMOverride = picked || null;
-
-        els.output.value = ensureVenueBullets(base);
-        toast('変換しました');
-
-        const kaikiSet = document.querySelector('[data-set="kaiki"]');
-        if (kaikiSet){
-          const kaikiInput = kaikiSet.querySelector('.input');
-          const kaikiConvertBtn = kaikiSet.querySelector('.btn-convert');
-          if (kaikiInput && kaikiInput.value.trim() && kaikiConvertBtn){
-            kaikiConvertBtn.click();
-          }
-        }
-        return;
-      }
-
-      if (setName === 'honbun') {
-        const kaikiOutEl = document.querySelector('[data-set="kaiki"] .output');
-        const venueOutEl = document.querySelector('[data-set="venue"] .output');
-        const kaikiVal = (kaikiOutEl && kaikiOutEl.value) ? kaikiOutEl.value : '';
-        const venueVal = (venueOutEl && venueOutEl.value) ? venueOutEl.value : '';
-
-        const outLines = [];
-
-        if (kaikiVal.trim()) {
-          kaikiVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
-        }
-        if (venueVal.trim()) {
-          venueVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
-        }
-
-        outLines.push('<p><br></p>');
-
-        const body = transform(src || '');
-        const bodyLines = body.split(/\r?\n/);
-        let para = '<p>\n';
-        for (const line of bodyLines) {
-          if (line.trim() === '') {
-            para += '<br>\n';
-          } else {
-            para += line + '<br>\n';
-          }
-        }
-        para += '</p>';
-        outLines.push(para);
-
-        els.output.value = outLines.join('\n');
-        toast('変換しました');
-        return;
-      }
-
-      els.output.value = transform(src);
-      toast('変換しました');
-    }
-
-    async function copyText(text, okMsg){
-      if(!text){ toast('出力が空です'); return; }
-      try{
-        await navigator.clipboard.writeText(text);
-        toast(okMsg||'コピーしました'); return;
-      }catch{}
-      try{
-        const ta=document.createElement('textarea');
-        ta.value=text; ta.style.position='fixed'; ta.style.left='-9999px'; ta.setAttribute('readonly','');
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-        toast(okMsg||'コピーしました');
-      }catch{ toast('コピーに失敗しました'); }
-    }
-
-    function onCopy(e){ e.preventDefault(); copyText(els.output.value||'', 'コピーしました'); }
-
-    if(els.convert) els.convert.addEventListener('click', onConvert);
-    if(els.copy)    els.copy.addEventListener('click', onCopy);
-    if(els.copyStart && els.startField) els.copyStart.addEventListener('click', (e)=>{ e.preventDefault(); copyText((els.startField.value||'').trim(), '開始日をコピーしました'); });
-    if(els.copyEnd && els.endField)     els.copyEnd.addEventListener('click',   (e)=>{ e.preventDefault(); copyText((els.endField.value||'').trim(),   '終了日をコピーしました'); });
-    if(els.copyDtFree && els.dtFree){
-      els.copyDtFree.addEventListener('click', (e)=>{
-        e.preventDefault();
-        const iso = els.dtFree.value || '';
-        if(!iso){ toast('日時を選択してください'); return; }
-        let f=iso;
-        if(iso.length>=16 && iso.indexOf('T')===10){
-          const y=iso.slice(0,4), mo=iso.slice(5,7), d=iso.slice(8,10), hh=iso.slice(11,13), mm=iso.slice(14,16);
-          f=`${y}/${mo}/${d} ${hh}:${mm}`;
-        }
-        copyText(f, '日時をコピーしました');
-      });
-    }
-
-    setEl.addEventListener('keydown', (e)=>{ if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); onConvert(); }});
+  async function copyText(text, okMsg){
+    if(!text){ toast('出力が空です'); return; }
+    try{
+      await navigator.clipboard.writeText(text);
+      toast(okMsg||'コピーしました'); return;
+    }catch{}
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=text; ta.style.position='fixed'; ta.style.left='-9999px'; ta.setAttribute('readonly','');
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+      toast(okMsg||'コピーしました');
+    }catch{ toast('コピーに失敗しました'); }
   }
 
-  [...document.querySelectorAll('.set')].map(makeSetController);
+  // =============================
+  //  セット別 変換関数
+  // =============================
+  function convertTitle(setEl){
+    const input = setEl.querySelector('.input');
+    const output = setEl.querySelector('.output');
+    const src = input?.value || '';
+    if (output) output.value = transform(src);
+  }
+
+  function convertKaiki(setEl){
+    const input = setEl.querySelector('.input');
+    const output = setEl.querySelector('.output');
+    const startField = setEl.querySelector('.date-start');
+    const endField = setEl.querySelector('.date-end');
+    const yearSel = setEl.querySelector('.year-select');
+
+    const src = input?.value || '';
+    const baseYear = yearSel ? Number(yearSel.value) : 2026;
+
+    const lines = String(src).split(/\r?\n/).filter(l => l.trim() !== '');
+    const outLines = [];
+    const startLines = [];
+    const endLines = [];
+
+    for(const lineRaw of lines){
+      const note = _extractNote(lineRaw);
+      const core = _stripNote(lineRaw);
+      let handled=false, outLine='', startStr='', endStr='';
+
+      // A) 開催中～
+      const nrm = _normalize(core);
+      const sep = nrm.indexOf('～');
+      if (!handled && sep !== -1 && nrm.slice(0,sep) === '開催中'){
+        const right = _parseRightOnly(core, baseYear);
+        if (right){
+          outLine = '■開催中～' + _outRightOnly(right);
+          if (note.text) outLine += ' ' + transform(note.text);
+          startStr = '';
+          endStr   = _endStrFor(right.y, right.m, right.d, note.endHM||null);
+          handled = true;
+        }
+      }
+
+      // B) 列挙（・）
+      if(!handled && core.includes('・')){
+        const list=_parseList(core, baseYear);
+        if(list){
+          const t=_timesList(list, note.endHM||null);
+          if(t){ startStr=t.startStr; endStr=t.endStr; }
+          outLine=_outList(list);
+          if (note.text) outLine += ' ' + transform(note.text);
+          handled=true;
+        }
+      }
+
+      // C) 範囲（～）
+      if(!handled && nrm.includes('～')){
+        const info=_parseRange(core, baseYear);
+        if(info){
+          const t=_timesRange(info, note.endHM||null);
+          if(t){ startStr=t.startStr; endStr=t.endStr; }
+          outLine=_outRange(info);
+          if (note.text) outLine += ' ' + transform(note.text);
+          handled=true;
+        }
+      }
+
+      // D) 単日
+      if(!handled){
+        const one=_parseSingle(core, baseYear);
+        if(one){
+          const t=_timesSingle(one, note.endHM||null);
+          if(t){ startStr=t.startStr; endStr=t.endStr; }
+          outLine=_outSingle(one);
+          if (note.text) outLine += ' ' + transform(note.text);
+          handled=true;
+        }
+      }
+
+      // E) フォールバック
+      if(!handled){
+        let t = transform(lineRaw);
+        t = t.replace(/[ 　]*(※|\*|＊)/, ' $1');
+        if(!t.trim().startsWith('■')) t = '■' + t.trimStart();
+        outLine = t;
+      }
+
+      // 入力に「開催中」が含まれていたら必ず含める
+      const raw = String(lineRaw);
+      if (raw.includes('開催中～') || raw.includes('開催中→')) {
+        if (!outLine.includes('開催中～')) {
+          outLine = outLine.replace(/^■(?:開催中[ 　]?)*?/, '■開催中～');
+        }
+      } else if (raw.includes('開催中')) {
+        if (!outLine.includes('開催中')) {
+          outLine = outLine.replace(/^■/, '■開催中 ');
+        }
+      }
+
+      outLines.push(outLine);
+      startLines.push(startStr||'');
+      endLines.push(endStr||'');
+    }
+
+    if (output) output.value = outLines.join('\n');
+    if (startField) startField.value = startLines.join('\n');
+    if (endField) endField.value = endLines.join('\n');
+  }
+
+  function convertVenue(setEl){
+    const input = setEl.querySelector('.input');
+    const output = setEl.querySelector('.output');
+    const src = input?.value || '';
+
+    // 会場※から終了時刻を集約（最も早い時刻を採用）
+    const lines = String(src || '').split(/\r?\n/);
+    let picked = null; // {hh, mm}
+    for (const ln of lines){
+      const note = _extractNote(ln);
+      if (note.endHM){
+        if (!picked) picked = note.endHM;
+        else {
+          const a = picked.hh*60 + picked.mm;
+          const b = note.endHM.hh*60 + note.endHM.mm;
+          if (b < a) picked = note.endHM;
+        }
+      }
+    }
+    window._venueEndHMOverride = picked || null;
+
+    const base = transform(src);
+    if (output) output.value = ensureVenueBullets(base);
+  }
+
+  function convertHonbun(setEl){
+    const input = setEl.querySelector('.input');
+    const output = setEl.querySelector('.output');
+    const src = input?.value || '';
+
+    const kaikiOutEl = document.querySelector('[data-set="kaiki"] .output');
+    const venueOutEl = document.querySelector('[data-set="venue"] .output');
+    const kaikiVal = (kaikiOutEl && kaikiOutEl.value) ? kaikiOutEl.value : '';
+    const venueVal = (venueOutEl && venueOutEl.value) ? venueOutEl.value : '';
+
+    const outLines = [];
+
+    if (kaikiVal.trim()) {
+      kaikiVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
+    }
+    if (venueVal.trim()) {
+      venueVal.split(/\r?\n/).forEach(l => { if (l.trim()) outLines.push(`<p>${l}</p>`); });
+    }
+
+    outLines.push('<p><br></p>');
+
+    const body = transform(src || '');
+    const bodyLines = body.split(/\r?\n/);
+    let para = '<p>\n';
+    for (const line of bodyLines) {
+      if (line.trim() === '') para += '<br>\n';
+      else para += line + '<br>\n';
+    }
+    para += '</p>';
+    outLines.push(para);
+
+    if (output) output.value = outLines.join('\n');
+  }
+
+  // =============================
+  //  全体変換（タイトルの変換ボタンのみ）
+  // =============================
+  function convertAll(){
+    const venueSet  = document.querySelector('[data-set="venue"]');
+    const kaikiSet  = document.querySelector('[data-set="kaiki"]');
+    const honbunSet = document.querySelector('[data-set="honbun"]');
+    const titleSet  = document.querySelector('[data-set="title"]');
+
+    // 依存順：会場 → 会期 → 本文 → タイトル
+    if (venueSet)  convertVenue(venueSet);
+    if (kaikiSet)  convertKaiki(kaikiSet);
+    if (honbunSet) convertHonbun(honbunSet);
+    if (titleSet)  convertTitle(titleSet);
+
+    toast('全て変換しました');
+  }
+
+  // =============================
+  //  コピー等イベント
+  // =============================
+  function wireSetCommon(setEl){
+    const setName = setEl.getAttribute('data-set');
+
+    const output = setEl.querySelector('.output');
+    const copyBtn = setEl.querySelector('.btn-copy');
+    if (copyBtn && output){
+      copyBtn.addEventListener('click', (e)=>{ e.preventDefault(); copyText(output.value||'', 'コピーしました'); });
+    }
+
+    if (setName === 'kaiki'){
+      const startField = setEl.querySelector('.date-start');
+      const endField   = setEl.querySelector('.date-end');
+      const copyStart  = setEl.querySelector('.btn-copy-start');
+      const copyEnd    = setEl.querySelector('.btn-copy-end');
+
+      if(copyStart && startField){
+        copyStart.addEventListener('click', (e)=>{ e.preventDefault(); copyText((startField.value||'').trim(), '開始日をコピーしました'); });
+      }
+      if(copyEnd && endField){
+        copyEnd.addEventListener('click', (e)=>{ e.preventDefault(); copyText((endField.value||'').trim(), '終了日をコピーしました'); });
+      }
+
+      const dtFree = setEl.querySelector('.dt-free');
+      const copyDtFree = setEl.querySelector('.btn-copy-dtfree');
+      if (copyDtFree && dtFree){
+        copyDtFree.addEventListener('click', (e)=>{
+          e.preventDefault();
+          const iso = dtFree.value || '';
+          if(!iso){ toast('日時を選択してください'); return; }
+          let f=iso;
+          if(iso.length>=16 && iso.indexOf('T')===10){
+            const y=iso.slice(0,4), mo=iso.slice(5,7), d=iso.slice(8,10), hh=iso.slice(11,13), mm=iso.slice(14,16);
+            f=`${y}/${mo}/${d} ${hh}:${mm}`;
+          }
+          copyText(f, '日時をコピーしました');
+        });
+      }
+    }
+  }
+
+  document.querySelectorAll('.set').forEach(wireSetCommon);
+
+  // タイトル変換ボタンのみ：全体変換
+  (function(){
+    const titleSet = document.querySelector('[data-set="title"]');
+    if(!titleSet) return;
+    const btn = titleSet.querySelector('.btn-convert');
+    if (btn) btn.addEventListener('click', (e)=>{ e.preventDefault(); convertAll(); });
+
+    // Ctrl/Cmd+Enter はタイトルセット内のみ有効（全体変換）
+    titleSet.addEventListener('keydown', (e)=>{
+      if((e.ctrlKey||e.metaKey) && e.key==='Enter'){
+        e.preventDefault();
+        convertAll();
+      }
+    });
+  })();
 
   // v1.0.1: バージョン表記（右上）をクリアボタンとして機能させる（会期タイトル右横 .dt-free と 年セレクト と 店舗ラジオだけ保持）
   (function(){
     function clearAllExceptDtFreeAndStore(){
       var nodes = document.querySelectorAll('input, textarea, select');
       nodes.forEach(function(el){
+        // dt-free は保持
         if (el.classList.contains('dt-free')) return;
+        // 店舗ラジオボタンも保持
         if (el.type === 'radio' && el.name === 'store') return;
+        // 年セレクト（基準年）も保持
         if (el.classList && el.classList.contains('year-select')) return;
 
         if (el.tagName === 'SELECT') {
@@ -897,7 +938,7 @@
         }
       });
       window._venueEndHMOverride = null;
-      if (typeof toast === 'function') toast('クリアしました');
+      toast('クリアしました');
     }
 
     var vb = document.getElementById('ver');
@@ -908,6 +949,6 @@
       });
     }
   })();
-</script>
+  </script>
 </body>
 </html>
