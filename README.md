@@ -219,8 +219,6 @@ Chrome拡張（Manifest V3）で、**3つの役割**に分けて実装します�
 - **日本橋（store_id=1 / suffix=2）**  
   `https://cmstakashimaya.com/webadmin/addon/store/article/create/?store_id=1&store_suffix_number=2`
 
----
-
 ### 7.4 KoMaTukuru → CMS の入力マッピング（基本）
 KoMaTukuruのどの値を、CMSのどの入力欄へ入れるかの対応表です。
 
@@ -241,8 +239,6 @@ KoMaTukuruのどの値を、CMSのどの入力欄へ入れるかの対応表で�
 - **開催終了日時（KoMaTukuru：会期 date-end）**
   - → CMS `開催終了日時`（`#article_to_date`）
   - → CMS `公開終了日時`（`#public_to_date`）
-
----
 
 ### 7.5 フロア（会場 → 階抽出 → select 選択）
 KoMaTukuruには「フロア」専用項目がないため、**会場出力から抽出**して CMS のフロア select を選択します。
@@ -278,8 +274,6 @@ KoMaTukuruには「フロア」専用項目がないため、**会場出力か�
 
 > 日本橋は同じ階が複数館に存在するため、「階だけ一致」では誤選択になります。必ず館名込みで一致させます。
 
----
-
 ### 7.6 入力の確定（イベント発火とUI依存への対応）
 CMS側は datetimepicker や validationEngine を使っているため、単に `value` を入れるだけでなく、次を行う前提です。
 
@@ -294,8 +288,6 @@ CMS側は datetimepicker や validationEngine を使っているため、単に 
 - 保存ボタン有効化など
 が正しく追従しやすくなります。
 
----
-
 ### 7.7 事故防止（ここ重要）
 運用方針として、次の安全策を必須にします。
 
@@ -305,8 +297,6 @@ CMS側は datetimepicker や validationEngine を使っているため、単に 
 - **送り先は「最後に触ったCMSタブ」**
   - 2画面運用時、現在ユーザーが触っているCMSを優先して誤爆を避ける
 
----
-
 ### 7.8 操作フロー（運用手順）
 1. Chromeで **KoMaTukuru** を開く（GitHub Pages）
 2. 別ウインドウ（または別タブ）で **CMSの新規作成画面** を開く
@@ -314,8 +304,6 @@ CMS側は datetimepicker や validationEngine を使っているため、単に 
 4. KoMaTukuruで整形（必要なら会期→会場の順など、通常運用どおり）
 5. KoMaTukuruの `toCMS` を押す
 6. CMS側の対象欄が自動入力され、最後に簡易ダイアログが出る（OKで閉じる）
-
----
 
 ### 7.9 KoMaTukuru側の参照DOM（前提）
 拡張は KoMaTukuru側で主に次の要素を参照します。  
@@ -327,8 +315,6 @@ CMS側は datetimepicker や validationEngine を使っているため、単に 
 - 開始日：`[data-set="kaiki"] textarea.date-start`
 - 終了日：`[data-set="kaiki"] textarea.date-end`
 - 会場出力：`[data-set="venue"] textarea.output`
-
----
 
 ### 7.10 CMS側の参照DOM（新宿CMSの例）
 今回提示された HTML 断片から、対象になっている主な入力欄は次です。
